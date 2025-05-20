@@ -1,0 +1,12 @@
+# VS caches and settings
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Build output
+bin/
+obj/
+
+# NuGet packages folder
+packages/

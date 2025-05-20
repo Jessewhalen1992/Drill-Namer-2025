@@ -1,0 +1,900 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Windows.Forms;
+using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.DatabaseServices;
+using Newtonsoft.Json;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+
+// Define alias to resolve ambiguity between Application classes
+using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
+
+// Define alias for System.Windows.Forms.FlowDirection
+using FormsFlowDirection = System.Windows.Forms.FlowDirection;
+
+namespace Drill_Namer
+{
+    public partial class FindReplaceForm : Form
+    {
+        private TextBox[] drillTextBoxes;
+        private Label[] drillLabels;
+        private const int DrillCount = 12; // Number of drills
+
+        public FindReplaceForm()
+        {
+            InitializeComponent();
+            InitializeDynamicControls();
+            LoadFromJson(); // Load from JSON when the form initializes
+        }
+
+        /// <summary>
+        /// Generates the JSON file path based on the drawing name.
+        /// </summary>
+        /// <returns>Full path to the JSON file.</returns>
+        private string GetJsonFilePath()
+        {
+            var acDoc = AcApplication.DocumentManager.MdiActiveDocument;
+            if (acDoc == null || string.IsNullOrEmpty(acDoc.Name))
+            {
+                MessageBox.Show("No active AutoCAD document found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                throw new InvalidOperationException("No active AutoCAD document found.");
+            }
+
+            string dwgDirectory = Path.GetDirectoryName(acDoc.Name);  // DWG file's directory
+            string drawingName = Path.GetFileNameWithoutExtension(acDoc.Name);  // DWG file's name without extension
+
+            // Remove any trailing hyphens to prevent empty segments
+            drawingName = drawingName.TrimEnd('-');
+
+            // Split the drawing name by '-' and take the first two segments for the prefix
+            string[] nameParts = drawingName.Split('-');
+            string prefix = nameParts.Length >= 2 ? $"{nameParts[0]}-{nameParts[1]}" : drawingName;
+
+            // Construct the JSON file path
+            string jsonFilePath = Path.Combine(dwgDirectory, $"{prefix}.json");
+
+            return jsonFilePath;
+        }
+
+        /// <summary>
+        /// Initializes all dynamic controls (labels, textboxes, buttons).
+        /// </summary>
+        private void InitializeDynamicControls()
+        {
+            drillTextBoxes = new TextBox[DrillCount];
+            drillLabels = new Label[DrillCount];
+
+            int controlHeight = 25;  // Standard height for individual buttons
+            int labelX = 10;         // X position for labels
+            int textboxX = 170;      // X position for textboxes
+            int buttonSetX = 330;    // X position for SET button
+            int buttonCreateX = 410; // X position for CREATE button
+            int buttonResetX = 490;  // X position for RESET button
+            int verticalSpacing = 5; // Spacing between rows
+
+            for (int i = 0; i < DrillCount; i++)
+            {
+                int currentIndex = i; // Local copy to capture the correct index
+                int controlY = 20 + currentIndex * (controlHeight + verticalSpacing); // Y position for each row
+
+                // Label for each drill
+                drillLabels[currentIndex] = new Label
+                {
+                    Text = $"DRILL_{currentIndex + 1}",
+                    Location = new System.Drawing.Point(labelX, controlY),
+                    Size = new System.Drawing.Size(150, controlHeight)
+                };
+                this.Controls.Add(drillLabels[currentIndex]);
+
+                // TextBox for each drill
+                drillTextBoxes[currentIndex] = new TextBox
+                {
+                    Location = new System.Drawing.Point(textboxX, controlY),
+                    Size = new System.Drawing.Size(150, controlHeight)
+                };
+                this.Controls.Add(drillTextBoxes[currentIndex]);
+
+                // SET Button
+                var setButton = new Button
+                {
+                    Text = "SET",
+                    Location = new System.Drawing.Point(buttonSetX, controlY),
+                    Size = new System.Drawing.Size(75, controlHeight)
+                };
+                setButton.Click += (sender, e) => SetDrill(currentIndex);
+                this.Controls.Add(setButton);
+
+                // CREATE Button
+                var createButton = new Button
+                {
+                    Text = "CREATE",
+                    Location = new System.Drawing.Point(buttonCreateX, controlY),
+                    Size = new System.Drawing.Size(75, controlHeight)
+                };
+                createButton.Click += (sender, e) => CreateButton_Click(currentIndex);
+                this.Controls.Add(createButton);
+
+                // RESET Button
+                var resetButton = new Button
+                {
+                    Text = "RESET",
+                    Location = new System.Drawing.Point(buttonResetX, controlY),
+                    Size = new System.Drawing.Size(75, controlHeight)
+                };
+                resetButton.Click += (sender, e) => ResetDrill(currentIndex);
+                this.Controls.Add(resetButton);
+            }
+
+            // Adjusted heights for bottom section buttons
+            var buttonHeight = 30;  // Slightly larger for "ALL" buttons
+            var buttonWidth = 150;   // Increased width for better visibility
+            var bottomButtonY = DrillCount * (controlHeight + verticalSpacing) + 20;
+
+            // Set All Button
+            var setAllButton = new Button
+            {
+                Text = "SET ALL",
+                Size = new System.Drawing.Size(buttonWidth, buttonHeight)
+            };
+            setAllButton.Click += SetAllButton_Click;
+
+            // Create All Button
+            var createAllButton = new Button
+            {
+                Text = "CREATE ALL",
+                Size = new System.Drawing.Size(buttonWidth, buttonHeight)
+            };
+            createAllButton.Click += CreateAllButton_Click;
+
+            // Reset All Button
+            var resetAllButton = new Button
+            {
+                Text = "RESET ALL",
+                Size = new System.Drawing.Size(buttonWidth, buttonHeight)
+            };
+            resetAllButton.Click += ResetAllButton_Click;
+
+            // Update From Block Attribute Button
+            var updateButton = new Button
+            {
+                Text = "UPDATE FROM BLOCK ATTRIBUTE",
+                Size = new System.Drawing.Size(220, buttonHeight) // Increased width to fit text
+            };
+            updateButton.Click += UpdateFromAttributesButton_Click;
+
+            // Create a FlowLayoutPanel for "All" buttons to manage layout
+            FlowLayoutPanel allButtonsPanel = new FlowLayoutPanel
+            {
+                Location = new System.Drawing.Point(buttonSetX, bottomButtonY),
+                Size = new System.Drawing.Size(800, buttonHeight + 10), // Adjust size as needed
+                FlowDirection = FormsFlowDirection.LeftToRight, // Using alias
+                WrapContents = false
+            };
+            this.Controls.Add(allButtonsPanel);
+
+            // Add "All" buttons to the FlowLayoutPanel
+            allButtonsPanel.Controls.Add(setAllButton);
+            allButtonsPanel.Controls.Add(createAllButton);
+            allButtonsPanel.Controls.Add(resetAllButton);
+            allButtonsPanel.Controls.Add(updateButton);
+
+            // Adjust the form's size to accommodate all buttons without overlapping
+            this.Width = 850;  // Increased width to prevent overlapping
+            this.Height = bottomButtonY + buttonHeight + 100; // Adjust height accordingly
+        }
+
+        /// <summary>
+        /// Sets a specific drill to the user-defined name if it doesn't have the default value.
+        /// </summary>
+        /// <param name="index">Index of the drill (0-based).</param>
+        private void SetDrill(int index)
+        {
+            if (index < 0 || index >= DrillCount) // Ensure valid index
+            {
+                MessageBox.Show($"Invalid index: {index}. Must be between 0 and {DrillCount - 1}.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string newDrillName = drillTextBoxes[index].Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(newDrillName))
+            {
+                MessageBox.Show($"Drill name for DRILL_{index + 1} cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string defaultValue = $"DRILL_{index + 1}";
+
+            // Check if current value is not default before setting
+            if (newDrillName.Equals(defaultValue, StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show($"DRILL_{index + 1} is already at its default value.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // Replace text in the drawing
+            ReplaceTextInAutoCAD(defaultValue, newDrillName);
+
+            // Replace block attributes in the drawing
+            ReplaceBlockAttributesInAutoCAD(index + 1, newDrillName);
+
+            // Update the label to reflect the new value
+            drillLabels[index].Text = newDrillName;
+
+            // Save the updated data to JSON
+            SaveData();
+
+            MessageBox.Show($"DRILL_{index + 1} has been set to '{newDrillName}'.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>
+        /// Handles the CREATE button click for an individual drill.
+        /// </summary>
+        /// <param name="index">Index of the drill (0-based).</param>
+        private void CreateButton_Click(int index)
+        {
+            if (index < 0 || index >= DrillCount)
+            {
+                MessageBox.Show($"Invalid index: {index}. Must be between 0 and {DrillCount - 1}.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string drillName = drillTextBoxes[index].Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(drillName))
+            {
+                MessageBox.Show($"Drill name for DRILL_{index + 1} cannot be empty.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            InsertBlockIntoLayout(drillName, index + 1); // Insert the block into the layout
+
+            // Inform the user that the block was created
+            MessageBox.Show($"Block for DRILL_{index + 1} ('{drillName}') has been created.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>
+        /// Resets a specific drill to its default value or blank based on its index.
+        /// </summary>
+        /// <param name="index">Index of the drill (0-based).</param>
+        private void ResetDrill(int index)
+        {
+            if (index < 0 || index >= DrillCount) // Ensure valid index
+            {
+                MessageBox.Show($"Invalid index: {index}. Must be between 0 and {DrillCount - 1}.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string defaultValue = $"DRILL_{index + 1}";
+            string currentValue = drillTextBoxes[index].Text.Trim();
+
+            // Determine if a reset is needed
+            bool needsReset = false;
+
+            if (index + 1 == 1)
+            {
+                // For DRILL_1, always reset to "DRILL_1" if not already
+                if (!currentValue.Equals("DRILL_1", StringComparison.OrdinalIgnoreCase))
+                {
+                    needsReset = true;
+                }
+            }
+            else
+            {
+                // For DRILL_2 to DRILL_12, reset only if current value is not blank
+                if (!string.IsNullOrWhiteSpace(currentValue))
+                {
+                    needsReset = true;
+                }
+            }
+
+            if (needsReset)
+            {
+                // Replace text in the drawing
+                if (index + 1 == 1)
+                {
+                    // DRILL_1 resets to "DRILL_1"
+                    ReplaceTextInAutoCAD(currentValue, defaultValue);
+                }
+                else
+                {
+                    // DRILL_2-12 resets to blank
+                    ReplaceTextInAutoCAD(currentValue, "");
+                }
+
+                // Replace block attributes in the drawing
+                if (index + 1 == 1)
+                {
+                    // If DRILL_1, set to "DRILL_1"
+                    ReplaceBlockAttributesInAutoCAD(index + 1, "DRILL_1", isReset: true);
+                }
+                else
+                {
+                    // For other DRILL_n, set to blank
+                    ReplaceBlockAttributesInAutoCAD(index + 1, "", isReset: true);
+                }
+
+                // Reset the TextBox and Label
+                if (index + 1 == 1)
+                {
+                    drillTextBoxes[index].Text = defaultValue;
+                    drillLabels[index].Text = defaultValue;
+                }
+                else
+                {
+                    drillTextBoxes[index].Text = "";
+                    drillLabels[index].Text = "";
+                }
+
+                // Save the updated data to JSON
+                SaveData();
+
+                MessageBox.Show($"DRILL_{index + 1} has been reset.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                // No action needed as the drill is already at its default value
+                MessageBox.Show($"DRILL_{index + 1} is already at its default value.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        /// <summary>
+        /// Replaces text in AutoCAD drawings (DBText and MText), including within nested blocks.
+        /// </summary>
+        /// <param name="oldValue">Text to replace.</param>
+        /// <param name="newValue">New text value.</param>
+        private void ReplaceTextInAutoCAD(string oldValue, string newValue)
+        {
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
+            Editor ed = doc.Editor;
+
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                BlockTable bt = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
+
+                foreach (ObjectId btrId in bt)
+                {
+                    BlockTableRecord btr = tr.GetObject(btrId, OpenMode.ForWrite) as BlockTableRecord;
+
+                    foreach (ObjectId objId in btr)
+                    {
+                        Entity ent = tr.GetObject(objId, OpenMode.ForWrite) as Entity;
+
+                        if (ent == null || ent.IsErased)
+                            continue; // Skip erased or null entities
+
+                        if (ent is DBText dbText && dbText.TextString.Equals(oldValue, StringComparison.OrdinalIgnoreCase))
+                        {
+                            dbText.TextString = newValue;
+                            ed.WriteMessage($"\nReplaced text '{oldValue}' with '{newValue}' in DBText.");
+                        }
+                        else if (ent is MText mText && mText.Contents.Contains(oldValue))
+                        {
+                            try
+                            {
+                                mText.UpgradeOpen();
+                                mText.Contents = mText.Contents.Replace(oldValue, newValue);
+                                ed.WriteMessage($"\nReplaced text '{oldValue}' with '{newValue}' in MText.");
+                            }
+                            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                            {
+                                // Handle cases where MText might be locked or otherwise inaccessible
+                                ed.WriteMessage($"\nFailed to replace text in MText: {ex.Message}");
+                            }
+                        }
+                        else if (ent is BlockReference blockRef && !blockRef.IsErased)
+                        {
+                            // Handle nested blocks recursively
+                            ReplaceTextInBlock(blockRef, oldValue, newValue, tr, ed);
+                        }
+                    }
+                }
+
+                tr.Commit();
+            }
+        }
+
+        /// <summary>
+        /// Recursively replaces text within a BlockReference and its nested blocks.
+        /// </summary>
+        /// <param name="blockRef">The BlockReference entity.</param>
+        /// <param name="oldValue">Text to replace.</param>
+        /// <param name="newValue">New text value.</param>
+        /// <param name="tr">The current transaction.</param>
+        /// <param name="ed">The AutoCAD editor.</param>
+        private void ReplaceTextInBlock(BlockReference blockRef, string oldValue, string newValue, Transaction tr, Editor ed)
+        {
+            if (blockRef == null || blockRef.IsErased)
+                return; // Skip erased or null blocks
+
+            // Iterate through each attribute in the block
+            foreach (ObjectId attId in blockRef.AttributeCollection)
+            {
+                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForWrite) as AttributeReference;
+                if (attRef != null && attRef.TextString.Contains(oldValue))
+                {
+                    try
+                    {
+                        attRef.TextString = attRef.TextString.Replace(oldValue, newValue);
+                        ed.WriteMessage($"\nReplaced text '{oldValue}' with '{newValue}' in BlockReference Attribute.");
+                    }
+                    catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                    {
+                        // Handle cases where AttributeReference might be locked or inaccessible
+                        ed.WriteMessage($"\nFailed to replace text in AttributeReference: {ex.Message}");
+                    }
+                }
+            }
+
+            // Iterate through entities within the block's BlockTableRecord for nested blocks
+            BlockTableRecord nestedBtr = tr.GetObject(blockRef.BlockTableRecord, OpenMode.ForRead) as BlockTableRecord;
+            foreach (ObjectId objId in nestedBtr)
+            {
+                Entity ent = tr.GetObject(objId, OpenMode.ForWrite) as Entity;
+
+                if (ent == null || ent.IsErased)
+                    continue; // Skip erased or null entities
+
+                if (ent is DBText dbText && dbText.TextString.Equals(oldValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    dbText.TextString = newValue;
+                    ed.WriteMessage($"\nReplaced text '{oldValue}' with '{newValue}' in DBText within nested BlockReference.");
+                }
+                else if (ent is MText mText && mText.Contents.Contains(oldValue))
+                {
+                    try
+                    {
+                        mText.UpgradeOpen();
+                        mText.Contents = mText.Contents.Replace(oldValue, newValue);
+                        ed.WriteMessage($"\nReplaced text '{oldValue}' with '{newValue}' in MText within nested BlockReference.");
+                    }
+                    catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                    {
+                        // Handle cases where MText might be locked or inaccessible
+                        ed.WriteMessage($"\nFailed to replace text in nested MText: {ex.Message}");
+                    }
+                }
+                else if (ent is BlockReference nestedBlockRef && !nestedBlockRef.IsErased)
+                {
+                    // Recursive call for deeper nested blocks
+                    ReplaceTextInBlock(nestedBlockRef, oldValue, newValue, tr, ed);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Replaces block attribute values in AutoCAD.
+        /// </summary>
+        /// <param name="drillIndex">Index of the drill (1-based).</param>
+        /// <param name="newValue">New drill name value to set.</param>
+        /// <param name="isReset">Indicates if the operation is a reset.</param>
+        private void ReplaceBlockAttributesInAutoCAD(int drillIndex, string newValue, bool isReset = false)
+        {
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
+            Editor ed = doc.Editor;
+
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                BlockTable bt = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
+
+                foreach (ObjectId btrId in bt)
+                {
+                    BlockTableRecord btr = tr.GetObject(btrId, OpenMode.ForWrite) as BlockTableRecord;
+
+                    foreach (ObjectId objId in btr)
+                    {
+                        Entity ent = tr.GetObject(objId, OpenMode.ForWrite) as Entity;
+
+                        if (ent == null || ent.IsErased)
+                            continue; // Skip erased or null entities
+
+                        if (ent is BlockReference blockRef && !blockRef.IsErased)
+                        {
+                            // Iterate through each attribute in the block
+                            foreach (ObjectId attId in blockRef.AttributeCollection)
+                            {
+                                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForWrite) as AttributeReference;
+
+                                if (attRef != null)
+                                {
+                                    // Check if the attribute tag matches DRILL_n where n is the drillIndex
+                                    string expectedTag = $"DRILL_{drillIndex}";
+
+                                    if (attRef.Tag.Equals(expectedTag, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        try
+                                        {
+                                            if (isReset && drillIndex == 1)
+                                            {
+                                                // For DRILL_1 during reset, set to "DRILL_1"
+                                                attRef.TextString = "DRILL_1";
+                                            }
+                                            else if (isReset)
+                                            {
+                                                // For other DRILL_n during reset, set to blank
+                                                attRef.TextString = "";
+                                            }
+                                            else
+                                            {
+                                                // For SET operation, set to the new drill name
+                                                attRef.TextString = newValue;
+                                            }
+
+                                            ed.WriteMessage($"\nUpdated attribute '{attRef.Tag}' to '{attRef.TextString}'.");
+                                        }
+                                        catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                                        {
+                                            // Handle cases where AttributeReference might be locked or inaccessible
+                                            ed.WriteMessage($"\nFailed to update AttributeReference: {ex.Message}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                tr.Commit();
+            }
+        }
+
+        /// <summary>
+        /// Handles the SET ALL button click.
+        /// </summary>
+        private void SetAllButton_Click(object sender, EventArgs e)
+        {
+            var confirmResult = MessageBox.Show("Are you sure you want to set all drills with your inputs?", "Confirm SET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirmResult == DialogResult.Yes)
+            {
+                bool anySetPerformed = false;
+
+                for (int i = 0; i < DrillCount; i++)
+                {
+                    string currentValue = drillTextBoxes[i].Text.Trim();
+                    string defaultValue = $"DRILL_{i + 1}";
+                    bool isDrillOne = (i + 1) == 1;
+
+                    // Determine if a set is needed
+                    bool needsSet = false;
+
+                    if (isDrillOne)
+                    {
+                        // For DRILL_1, set only if not already default
+                        if (!currentValue.Equals(defaultValue, StringComparison.OrdinalIgnoreCase))
+                        {
+                            needsSet = true;
+                        }
+                    }
+                    else
+                    {
+                        // For DRILL_2 to DRILL_12, set only if not default
+                        if (!currentValue.Equals(defaultValue, StringComparison.OrdinalIgnoreCase))
+                        {
+                            needsSet = true;
+                        }
+                    }
+
+                    if (needsSet)
+                    {
+                        // Perform the set operation for this drill
+                        SetDrill(i);
+                        anySetPerformed = true;
+                    }
+                }
+
+                if (anySetPerformed)
+                {
+                    MessageBox.Show("All applicable drills have been set with your inputs.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("All drills are already at their original values. No set needed.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles the RESET ALL button click.
+        /// </summary>
+        private void ResetAllButton_Click(object sender, EventArgs e)
+        {
+            var confirmResult = MessageBox.Show("Are you sure you want to reset all drills?", "Confirm RESET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirmResult == DialogResult.Yes)
+            {
+                bool anyResetPerformed = false;
+
+                for (int i = 0; i < DrillCount; i++)
+                {
+                    string currentValue = drillTextBoxes[i].Text.Trim();
+                    string defaultValue = $"DRILL_{i + 1}";
+                    bool isDrillOne = (i + 1) == 1;
+                    bool needsReset = false;
+
+                    if (isDrillOne)
+                    {
+                        if (!currentValue.Equals(defaultValue, StringComparison.OrdinalIgnoreCase))
+                        {
+                            needsReset = true;
+                        }
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrWhiteSpace(currentValue))
+                        {
+                            needsReset = true;
+                        }
+                    }
+
+                    if (needsReset)
+                    {
+                        // Perform the reset operation for this drill
+                        ResetDrill(i);
+                        anyResetPerformed = true;
+                    }
+                }
+
+                if (anyResetPerformed)
+                {
+                    MessageBox.Show("All applicable drills have been reset.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("All drills are already at their default values. No reset needed.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles the UPDATE FROM BLOCK ATTRIBUTE button click.
+        /// </summary>
+        private void UpdateFromAttributesButton_Click(object sender, EventArgs e)
+        {
+            UpdateFromBlockAttribute();
+        }
+
+
+
+
+
+        private void CreateAllButton_Click(object sender, EventArgs e)
+        {
+            for (int i = 0; i < DrillCount; i++)
+            {
+                CreateButton_Click(i); // Simulate individual create click
+            }
+        }
+
+
+        /// <summary>
+        /// Updates the form fields based on block attributes in the selected blocks.
+        /// </summary>
+        private void UpdateFromBlockAttribute()
+        {
+            try
+            {
+                var acDoc = AcApplication.DocumentManager.MdiActiveDocument;
+                var editor = acDoc.Editor;
+
+                // Prompt for selection of blocks
+                PromptSelectionOptions options = new PromptSelectionOptions();
+                options.MessageForAdding = "Select blocks with DRILL attributes:";
+                PromptSelectionResult result = editor.GetSelection(options);
+
+                if (result.Status != PromptStatus.OK)
+                {
+                    MessageBox.Show("No blocks selected.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                SelectionSet selectionSet = result.Value;
+                var selectedObjects = selectionSet.GetObjectIds();
+
+                using (var tr = acDoc.TransactionManager.StartTransaction())
+                {
+                    foreach (var objectId in selectedObjects)
+                    {
+                        var blockRef = tr.GetObject(objectId, OpenMode.ForRead) as BlockReference;
+                        if (blockRef == null || blockRef.IsErased)
+                            continue; // Skip null or erased block references
+
+                        // Iterate through the attributes of the block
+                        foreach (ObjectId attrId in blockRef.AttributeCollection)
+                        {
+                            AttributeReference attrRef = tr.GetObject(attrId, OpenMode.ForRead) as AttributeReference;
+                            if (attrRef != null && attrRef.Tag.StartsWith("DRILL_", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Extract the drill number from the tag, e.g., "DRILL_12" -> 12
+                                string numberPart = attrRef.Tag.Substring(6); // Get the part after "DRILL_"
+                                if (int.TryParse(numberPart, out int drillNumber))
+                                {
+                                    if (drillNumber >= 1 && drillNumber <= DrillCount)
+                                    {
+                                        int index = drillNumber - 1; // Convert to zero-based index
+                                        string textValue = !string.IsNullOrEmpty(attrRef.TextString) ? attrRef.TextString : $"DRILL_{drillNumber}";
+                                        drillTextBoxes[index].Text = textValue;
+                                        drillLabels[index].Text = textValue; // Update label as well
+                                    }
+                                    else
+                                    {
+                                        // Handle unexpected drill numbers if necessary
+                                        MessageBox.Show($"Unexpected drill number: {drillNumber}", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                    }
+                                }
+                                else
+                                {
+                                    // Handle non-integer drill tags if necessary
+                                    MessageBox.Show($"Invalid drill tag format: {attrRef.Tag}", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                }
+                            }
+                        }
+                    }
+                    tr.Commit();
+                }
+
+                MessageBox.Show("Updated fields from block attributes.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to update from block attributes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Inserts a block into the AutoCAD layout with the specified drill name and index.
+        /// </summary>
+        /// <param name="drillName">Name of the drill.</param>
+        /// <param name="drillIndex">Index of the drill (1-based).</param>
+        private void InsertBlockIntoLayout(string drillName, int drillIndex)
+        {
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
+            Editor ed = doc.Editor;
+
+            using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
+            {
+                BlockTable blockTable = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
+
+                if (!blockTable.Has("DRILL_NAME_HEADING"))
+                {
+                    MessageBox.Show("Block 'DRILL_NAME_HEADING' does not exist in the drawing.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                ObjectId blockId = blockTable["DRILL_NAME_HEADING"];
+                if (blockId != ObjectId.Null)
+                {
+                    BlockReference blockRef = new BlockReference(new Autodesk.AutoCAD.Geometry.Point3d(0, 0, 0), blockId);
+
+                    BlockTableRecord modelSpace = tr.GetObject(blockTable[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
+                    modelSpace.AppendEntity(blockRef);
+                    tr.AddNewlyCreatedDBObject(blockRef, true);
+
+                    foreach (ObjectId attId in blockRef.AttributeCollection)
+                    {
+                        AttributeReference attRef = tr.GetObject(attId, OpenMode.ForWrite) as AttributeReference;
+                        if (attRef != null && attRef.Tag.Equals($"DRILL_{drillIndex}", StringComparison.OrdinalIgnoreCase))
+                        {
+                            attRef.TextString = drillName;
+                        }
+                    }
+                }
+
+                tr.Commit();
+            }
+        }
+
+        /// <summary>
+        /// Saves the current drill names to a JSON file.
+        /// </summary>
+        private void SaveToJson()
+        {
+            string jsonFilePath = GetJsonFilePath();
+
+            // Ensure exactly DrillCount entries
+            string[] drillNames = new string[DrillCount];
+            for (int i = 0; i < DrillCount; i++)
+            {
+                drillNames[i] = drillTextBoxes[i].Text.Trim();
+            }
+
+            try
+            {
+                File.WriteAllText(jsonFilePath, JsonConvert.SerializeObject(drillNames, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save JSON: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Handles the SAVE DATA operation.
+        /// </summary>
+        private void SaveData()
+        {
+            SaveToJson();
+        }
+
+        /// <summary>
+        /// Loads drill names from a JSON file.
+        /// </summary>
+        private void LoadFromJson()
+        {
+            try
+            {
+                string jsonFilePath = GetJsonFilePath();
+
+                if (!File.Exists(jsonFilePath))
+                {
+                    // Initialize with default drill names
+                    InitializeDefaultDrills();
+
+                    // Save default drills to JSON
+                    SaveToJson();
+
+                    MessageBox.Show($"JSON file not found. Initialized with default drill names and created '{Path.GetFileName(jsonFilePath)}'.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                string jsonData = File.ReadAllText(jsonFilePath);
+                var drillNames = JsonConvert.DeserializeObject<string[]>(jsonData);
+
+                if (drillNames == null)
+                {
+                    MessageBox.Show("JSON data is null. Initializing with default drill names.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    InitializeDefaultDrills();
+                    SaveToJson();
+                    return;
+                }
+
+                // Validate and load drill names
+                for (int i = 0; i < DrillCount; i++)
+                {
+                    if (i < drillNames.Length && !string.IsNullOrWhiteSpace(drillNames[i]))
+                    {
+                        drillTextBoxes[i].Text = drillNames[i].Trim();
+                        drillLabels[i].Text = drillNames[i].Trim();  // Load labels as well from the JSON
+                    }
+                    else
+                    {
+                        // If JSON has fewer entries or entry is empty, initialize remaining drills with default names
+                        string defaultName = $"DRILL_{i + 1}";
+                        drillTextBoxes[i].Text = defaultName;
+                        drillLabels[i].Text = defaultName;
+                    }
+                }
+
+                // Optionally, verify if all drills have been loaded correctly
+                // You can add a confirmation message here if needed
+
+                // Save back the potentially updated drill names
+                SaveToJson();
+            }
+            catch (JsonException jex)
+            {
+                MessageBox.Show($"Failed to parse JSON: {jex.Message}", "JSON Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                InitializeDefaultDrills();
+                SaveToJson();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load JSON: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Initializes default drill names in the form.
+        /// </summary>
+        private void InitializeDefaultDrills()
+        {
+            for (int i = 0; i < DrillCount; i++)
+            {
+                string defaultName = $"DRILL_{i + 1}";
+                drillTextBoxes[i].Text = defaultName;
+                drillLabels[i].Text = defaultName;
+            }
+        }
+    }
+}
