@@ -129,31 +129,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\DRILL NAMER 2.0\DRILLNAMER.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="..\..\DRILL NAMER 2.0\DRILLNAMER.Designer.cs">
-      <DependentUpon>DRILLNAMER.cs</DependentUpon>
-    </Compile>
-    <Compile Include="AutoCADHelper.cs" />
-    <Compile Include="BlockAttributeData.cs" />
-    <Compile Include="Blockdata.cs" />
-    <Compile Include="CoordinatesData.cs" />
-    <Compile Include="DrillData.cs" />
-    <Compile Include="Logger.cs" />
-    <Compile Include="Program.cs" />
+    <Compile Include="DrillNamer_Consolidated.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="WellsData.cs" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\..\DRILL NAMER 2.0\DRILLNAMER.resx">
-      <DependentUpon>DRILLNAMER.cs</DependentUpon>
-    </EmbeddedResource>
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="..\..\DRILL NAMER 2.0\findreplacecommand.cs">
-      <Link>findreplacecommand.cs</Link>
-    </Compile>
     <None Include="app.config" />
     <None Include="Drill Namer.dll.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -170,7 +149,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="FodyWeavers.xml" />
-    <Content Include="System.Memory.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\Fody.6.8.2\build\Fody.targets" Condition="Exists('..\packages\Fody.6.8.2\build\Fody.targets')" />
