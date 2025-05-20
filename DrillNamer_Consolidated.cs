@@ -24,7 +24,7 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 using Drill_Namer.Models;
-using acadApp = Autodesk.AutoCAD.ApplicationServices.Application;
+using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 using AColor = Autodesk.AutoCAD.Colors.Color;
 using DrawingColor = System.Drawing.Color;
 using FormsFlowDirection = System.Windows.Forms.FlowDirection;
@@ -38,7 +38,7 @@ namespace Drill_Namer
         /// </summary>
         public static Transaction StartTransaction()
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             return doc.Database.TransactionManager.StartTransaction();
         }
 
@@ -51,7 +51,7 @@ namespace Drill_Namer
         public static bool GetInsertionPoint(string promptMessage, out Point3d insertionPoint)
         {
             insertionPoint = Point3d.Origin;
-            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             if (doc == null) return false;
 
             Editor ed = doc.Editor;
@@ -77,7 +77,7 @@ namespace Drill_Namer
             Dictionary<string, string> attributes,
             double scale = 1.0)
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             ObjectId brId = ObjectId.Null;
 
@@ -320,7 +320,7 @@ namespace Drill_Namer
 
                 logger = LogManager.GetCurrentClassLogger();
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 try
                 {
@@ -345,7 +345,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document acDoc = Application.DocumentManager.MdiActiveDocument;
+                Document acDoc = AcApplication.DocumentManager.MdiActiveDocument;
                 if (acDoc != null && acDoc.IsNamedDrawing && !string.IsNullOrEmpty(acDoc.Name))
                 {
                     string drawingDirectory = Path.GetDirectoryName(acDoc.Name);
@@ -462,6 +462,26 @@ namespace Drill_Namer
         private GroupBox drillGroupBox;
         private ComboBox drillComboBox;
         private Button generateJsonButton;
+
+        private System.ComponentModel.IContainer components = null;
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        private void InitializeComponent()
+        {
+            this.SuspendLayout();
+            this.ClientSize = new System.Drawing.Size(600, 650);
+            this.Name = "FindReplaceForm";
+            this.Text = "Find and Replace Form";
+            this.ResumeLayout(false);
+        }
 
         public FindReplaceForm()
         {
@@ -1089,7 +1109,7 @@ namespace Drill_Namer
 
                 return null;
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error generating JSON for drill '{drillName}': {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while generating JSON for drill '{drillName}': {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1117,7 +1137,7 @@ namespace Drill_Namer
 
                 return coordData;
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetCoordinatesForDrill: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while retrieving coordinates: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1216,7 +1236,7 @@ namespace Drill_Namer
                     return double.NaN;
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetLateralLengthFromUser: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while getting lateral length: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1250,7 +1270,7 @@ namespace Drill_Namer
                     Logger.LogInfo("User cancelled JSON save dialog.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error saving JSON file: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while saving the JSON file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1272,7 +1292,7 @@ namespace Drill_Namer
 
                 return text;
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in RemoveFormattingCodes: {ex.Message}\n{ex.StackTrace}");
                 return text; // Return original text if an error occurs
@@ -1287,7 +1307,7 @@ namespace Drill_Namer
                 string drawingName = GetDrawingName();
                 revisionNumber = ParseRevisionNumber(drawingName);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetRevisionInfo: {ex.Message}\n{ex.StackTrace}");
             }
@@ -1303,7 +1323,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
 
                 // Prompt the user to select a block reference
@@ -1381,7 +1401,7 @@ namespace Drill_Namer
                     }
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetBlockData: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while retrieving block data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1437,7 +1457,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
                 Database db = doc.Database;
 
@@ -1500,7 +1520,7 @@ namespace Drill_Namer
                 Logger.LogInfo($"Extracted {blockDataList.Count} blocks with 'DRILLNAME' attribute.");
                 return blockDataList;
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in SelectAndExtractBlockData: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while selecting and extracting block data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1511,7 +1531,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document acDoc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+                Document acDoc = AcApplication.DocumentManager.MdiActiveDocument;
                 if (acDoc == null)
                 {
                     Logger.LogError("No active AutoCAD document found.");
@@ -1524,7 +1544,7 @@ namespace Drill_Namer
                 Logger.LogInfo($"Retrieved Drawing Name: {fileName}");
                 return fileName;
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetDrawingName: {ex.Message}\n{ex.StackTrace}");
                 return string.Empty;
@@ -1569,7 +1589,7 @@ namespace Drill_Namer
                     Logger.LogWarning($"No revision pattern found in Drawing Name: {drawingName}. Defaulting revision number to 0.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in ParseRevisionNumber: {ex.Message}\n{ex.StackTrace}");
             }
@@ -1604,7 +1624,7 @@ namespace Drill_Namer
                     HandleSingleSelection(drillIndex);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"An unexpected error occurred: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Logger.LogError($"Exception in GenerateJsonButton_Click: {ex.Message}\n{ex.StackTrace}");
@@ -1665,7 +1685,7 @@ namespace Drill_Namer
                 MessageBox.Show("JSON file generated for all drills.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 Logger.LogInfo("JSON file generated for all drills.");
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Error in HandleAllSelection: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Logger.LogError($"Exception in HandleAllSelection: {ex.Message}\n{ex.StackTrace}");
@@ -1685,7 +1705,7 @@ namespace Drill_Namer
                 // Generate JSON for the selected drill
                 GenerateJsonForDrill(drillIndex);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Error in HandleSingleSelection: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Logger.LogError($"Exception in HandleSingleSelection: {ex.Message}\n{ex.StackTrace}");
@@ -1717,7 +1737,7 @@ namespace Drill_Namer
                     Logger.LogInfo("User cancelled JSON save dialog.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error saving WellsData JSON file: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while saving the JSON file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1731,7 +1751,7 @@ namespace Drill_Namer
 
         private void HeadingButton_Click(int index)
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             using (DocumentLock docLock = doc.LockDocument())
             {
                 using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
@@ -1821,7 +1841,7 @@ namespace Drill_Namer
                 return;
             }
 
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Editor ed = doc.Editor;
             Database db = doc.Database;
 
@@ -1942,7 +1962,7 @@ namespace Drill_Namer
                 MessageBox.Show("Successfully created DRILL + HEADING blocks for all non-default drills.",
                                 "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Exception in HeadingAllButton_Click: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while inserting heading blocks: {ex.Message}",
@@ -1955,7 +1975,7 @@ namespace Drill_Namer
             try
             {
                 // STEP 0: Extract grid labels from layer "Z-DRILL-POINT" and export to C:\CORDS\CORDS.csv
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Database db = doc.Database;
                 Editor ed = doc.Editor;
                 var gridData = new List<(string Label, double Northing, double Easting)>();
@@ -2144,7 +2164,7 @@ namespace Drill_Namer
 
                 // STEP 7: Prompt user for insertion point.
                 MessageBox.Show("BACK TO CAD, PICK A INSERTION POINT", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                doc = AcadApp.DocumentManager.MdiActiveDocument;
+                doc = AcApplication.DocumentManager.MdiActiveDocument;
                 ed = doc.Editor;
                 PromptPointResult ppr = ed.GetPoint("\nSelect insertion point for the coordinate table:");
                 if (ppr.Status != PromptStatus.OK)
@@ -2167,7 +2187,7 @@ namespace Drill_Namer
                 // STEP 9: Insert headings.
                 HeadingAllButton_Click(null, EventArgs.Empty);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in COMPLETE CORDS: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"Error in COMPLETE CORDS: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -2201,7 +2221,7 @@ namespace Drill_Namer
 
         private void SwapButton_Click(object sender, EventArgs e)
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
 
             int index1 = swapComboBox1.SelectedIndex;
@@ -2289,7 +2309,7 @@ namespace Drill_Namer
 
         private void ResetDrill(int index)
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
 
             string defaultName = $"DRILL_{index + 1}";
@@ -2372,7 +2392,7 @@ namespace Drill_Namer
                         Logger.LogInfo($"ResetDrill => updated {updatedAttributes} attributes.");
                     }
                 }
-                catch (Exception ex)
+                catch (System.Exception ex)
                 {
                     Logger.LogError($"Error in ResetDrill: {ex.Message}\n{ex.StackTrace}");
                     MessageBox.Show($"Error: {ex.Message}", "Reset Drill", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -2392,7 +2412,7 @@ namespace Drill_Namer
             Logger.LogInfo("Initiating Reset All operation.");
             int totalReset = 0;
 
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
 
             try
@@ -2501,7 +2521,7 @@ namespace Drill_Namer
                 MessageBox.Show($"Successfully reset all drills. Total attributes reset: {totalReset}.",
                                 "Reset All", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error during Reset All: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred during the Reset All operation: {ex.Message}",
@@ -2514,7 +2534,7 @@ namespace Drill_Namer
             bool anyUpdatePerformed = false;
             try
             {
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
 
                 PromptSelectionResult selResult = ed.GetSelection();
@@ -2583,7 +2603,7 @@ namespace Drill_Namer
                     MessageBox.Show("No matching DRILL_# attributes found to update form fields.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"An error occurred while updating from block attributes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -2614,7 +2634,7 @@ namespace Drill_Namer
                     return;
                 }
 
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
                 PromptPointResult ppr = ed.GetPoint("\nSelect insertion point for the table:");
                 if (ppr.Status != PromptStatus.OK)
@@ -2631,7 +2651,7 @@ namespace Drill_Namer
                     InsertAndFormatTable(insertionPoint, excelData, tableStyleName);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Error creating table: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -2641,7 +2661,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
                 Database db = doc.Database;
 
@@ -2713,7 +2733,7 @@ namespace Drill_Namer
 
                 MessageBox.Show($"XLS file created successfully at:\n{excelFilePath}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"An error occurred while creating XLS:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -2721,7 +2741,7 @@ namespace Drill_Namer
 
         private void WellCornersButton_Click(object sender, EventArgs e)
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Editor ed = doc.Editor;
             Database db = doc.Database;
 
@@ -2808,7 +2828,7 @@ namespace Drill_Namer
                                     "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Error creating WELL CORNERS table: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -2841,7 +2861,7 @@ namespace Drill_Namer
 
         private string GetJsonFilePath()
         {
-            var acDoc = AcadApp.DocumentManager.MdiActiveDocument;
+            var acDoc = AcApplication.DocumentManager.MdiActiveDocument;
             if (acDoc == null || string.IsNullOrEmpty(acDoc.Name))
             {
                 MessageBox.Show("No active AutoCAD document found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -2858,7 +2878,7 @@ namespace Drill_Namer
 
         private string GetDrawingNameWithoutExtension()
         {
-            var acDoc = AcadApp.DocumentManager.MdiActiveDocument;
+            var acDoc = AcApplication.DocumentManager.MdiActiveDocument;
             if (acDoc == null || string.IsNullOrEmpty(acDoc.Name))
             {
                 throw new InvalidOperationException("No active AutoCAD document found.");
@@ -3049,7 +3069,7 @@ namespace Drill_Namer
                     File.WriteAllLines(reportFilePath, reportLines);
                     Logger.LogInfo($"Report successfully written to {reportFilePath}");
                 }
-                catch (Exception ex)
+                catch (System.Exception ex)
                 {
                     Logger.LogError($"Error writing report file: {ex.Message}");
                     MessageBox.Show($"An error occurred while writing the report file: {ex.Message}",
@@ -3067,7 +3087,7 @@ namespace Drill_Namer
                     MessageBox.Show($"All drill names match the table values and block DRILLNAME attributes.\n\nDetailed report saved at:\n{reportFilePath}", "Check Results", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in CompareDrillNamesWithTableAndBlocks: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred during comparison: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -3130,7 +3150,7 @@ namespace Drill_Namer
                 Logger.LogWarning($"Attribute '{attributeTag}' not found in block '{blockRef.Name}'.");
                 return string.Empty;
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetAttributeValue: {ex.Message}\n{ex.StackTrace}");
                 return string.Empty;
@@ -3292,7 +3312,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Database db = doc.Database;
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
@@ -3320,7 +3340,7 @@ namespace Drill_Namer
                     }
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error refreshing UI: {ex.Message}");
                 MessageBox.Show($"An error occurred while refreshing the UI: {ex.Message}",
@@ -3340,7 +3360,7 @@ namespace Drill_Namer
             string oldDrillName = drillLabels[index].Text.Trim();
             Logger.LogInfo($"SetDrill => from '{oldDrillName}' to '{newDrillName}' (Tag='{defaultName}').");
 
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             try
             {
@@ -3411,7 +3431,7 @@ namespace Drill_Namer
                 drillLabels[index].Text = newDrillName;
                 SaveToJson();
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error setting {defaultName}: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred while setting drill attributes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -3443,7 +3463,7 @@ namespace Drill_Namer
 
         private void InsertAndFormatTable(Point3d insertionPoint, string[,] cellData, string tableStyleName)
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             Editor ed = doc.Editor;
             using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -3524,7 +3544,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
                 Database db = doc.Database;
 
@@ -3571,7 +3591,7 @@ namespace Drill_Namer
                     CompareDrillNamesWithTableAndBlocks(tableValues, blockDataList);
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error during check operation: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred during the check operation: {ex.Message}",
@@ -3584,7 +3604,7 @@ namespace Drill_Namer
             try
             {
                 // Collect grid labels from layer "Z-DRILL-POINT" (change this string if needed)
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Database db = doc.Database;
                 Editor ed = doc.Editor;
                 var gridData = new List<(string Label, double Northing, double Easting)>();
@@ -3639,7 +3659,7 @@ namespace Drill_Namer
                 MessageBox.Show($"UTM CSV created successfully at:\n{csvPath}",
                     "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in GetUtmsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"Error generating UTMs CSV: {ex.Message}",
@@ -3659,7 +3679,7 @@ namespace Drill_Namer
                 }
 
                 // Prompt the user to select a polyline
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Editor ed = doc.Editor;
                 Database db = doc.Database;
 
@@ -3716,7 +3736,7 @@ namespace Drill_Namer
                 }
                 MessageBox.Show("Drill points added successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in AddDrillPtsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"Error: {ex.Message}", "Add Drill Pts", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -3729,7 +3749,7 @@ namespace Drill_Namer
                 Logger.LogInfo("Update Offsets: operation started.");
 
                 // 1) Get active AutoCAD document and editor.
-                Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                 {
                     MessageBox.Show("No active AutoCAD document.", "Update Offsets",
@@ -3954,7 +3974,7 @@ namespace Drill_Namer
                     Logger.LogInfo($"Update Offsets done => {updatedCount} updated, {noMatchCount} no-match cells.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in UpdateOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"An error occurred: {ex.Message}", "Update Offsets",
@@ -3995,7 +4015,7 @@ namespace Drill_Namer
         #endregion
         private string GetReportFilePath()
         {
-            Document acDoc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document acDoc = AcApplication.DocumentManager.MdiActiveDocument;
             if (acDoc == null || string.IsNullOrEmpty(acDoc.Name))
             {
                 MessageBox.Show("No active AutoCAD document found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -4024,7 +4044,7 @@ namespace Drill_Namer
                 };
                 File.WriteAllText(jsonFilePath, JsonConvert.SerializeObject(data, Formatting.Indented));
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Failed to save JSON: {ex.Message}",
                                 "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -4077,7 +4097,7 @@ namespace Drill_Namer
                     SaveToJson();
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Error loading JSON data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 InitializeDefaultDrills();
@@ -4086,7 +4106,7 @@ namespace Drill_Namer
         }
         private Table SelectCoordinateTable()
         {
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Editor ed = doc.Editor;
             // Prompt the user to select a table with coordinate data
             PromptEntityOptions peo = new PromptEntityOptions("\nSelect the table with coordinate data:");
@@ -4112,7 +4132,7 @@ namespace Drill_Namer
             string newValTrim = newValue.Trim();
             Logger.LogInfo($"Updating attributes from '{oldValTrim}' to '{newValTrim}' (exact match, ignore case).");
 
-            Document doc = AcadApp.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             int updatedCount = 0;
 
@@ -4220,11 +4240,11 @@ namespace Drill_Namer
         static void Main()
         {
             // Enable visual styles and set text rendering
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
             // Run the main form
-            Application.Run(new FindReplaceForm());
+            System.Windows.Forms.Application.Run(new FindReplaceForm());
         }
     }
     public class FindReplaceCommand
@@ -4235,7 +4255,7 @@ namespace Drill_Namer
         public static void ShowFindReplaceForm()
         {
             FindReplaceForm form = new FindReplaceForm();
-            acadApp.ShowModalDialog(form);
+            AcApplication.ShowModalDialog(form);
         }
     }
 }
