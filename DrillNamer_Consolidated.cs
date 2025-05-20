@@ -502,9 +502,14 @@ namespace Drill_Namer
             // Basic form settings
             this.AutoScroll = false;
             this.AutoSize = false;
-            this.BackColor = System.Drawing.Color.Black;
-            this.ForeColor = System.Drawing.Color.White;
+            DrawingColor darkBack = DrawingColor.FromArgb(45, 45, 48);
+            this.BackColor = darkBack;
+            this.ForeColor = DrawingColor.White;
+            this.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.Padding = new Padding(10);
             this.Text = "DRILL PROPERTIES";
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.MinimumSize = new System.Drawing.Size(900, 500);
 
             // Arrays for dynamic controls
             drillTextBoxes = new TextBox[DrillCount];
@@ -523,11 +528,12 @@ namespace Drill_Namer
             {
                 Name = "mainPanel",
                 AutoScroll = true,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White,
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White,
                 Location = new System.Drawing.Point(0, 0),
                 Size = new System.Drawing.Size(1100, 600),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Dock = DockStyle.Fill
             };
             this.Controls.Add(mainPanel);
 
@@ -538,8 +544,9 @@ namespace Drill_Namer
                 Location = new System.Drawing.Point(10, 10),
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White,
+                Padding = new Padding(10)
             };
             mainPanel.Controls.Add(drillGroupBox);
 
@@ -551,8 +558,11 @@ namespace Drill_Namer
                 RowCount = DrillCount + 1,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White,
+                Dock = DockStyle.Top,
+                Padding = new Padding(5),
+                CellBorderStyle = TableLayoutPanelCellBorderStyle.Single
             };
 
             // Set column widths
@@ -569,8 +579,8 @@ namespace Drill_Namer
                 Font = labelFont,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             }, 0, 0);
             tableLayout.Controls.Add(new Label
             {
@@ -578,8 +588,8 @@ namespace Drill_Namer
                 Font = labelFont,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             }, 1, 0);
             tableLayout.Controls.Add(new Label
             {
@@ -587,8 +597,8 @@ namespace Drill_Namer
                 Font = labelFont,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             }, 2, 0);
             tableLayout.Controls.Add(new Label
             {
@@ -596,8 +606,8 @@ namespace Drill_Namer
                 Font = labelFont,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             }, 3, 0);
             tableLayout.Controls.Add(new Label
             {
@@ -605,8 +615,8 @@ namespace Drill_Namer
                 Font = labelFont,
                 TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             }, 4, 0);
 
             // Populate drill rows
@@ -619,8 +629,8 @@ namespace Drill_Namer
                     Font = labelFont,
                     TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
                     Dock = DockStyle.Fill,
-                    BackColor = System.Drawing.Color.Black,
-                    ForeColor = System.Drawing.Color.White
+                    BackColor = darkBack,
+                    ForeColor = DrawingColor.White
                 };
                 tableLayout.Controls.Add(drillLabels[i], 0, i + 1);
 
@@ -629,8 +639,8 @@ namespace Drill_Namer
                 {
                     Font = textBoxFont,
                     Dock = DockStyle.Fill,
-                    BackColor = System.Drawing.Color.Black,
-                    ForeColor = System.Drawing.Color.White
+                    BackColor = darkBack,
+                    ForeColor = DrawingColor.White
                 };
                 tableLayout.Controls.Add(drillTextBoxes[i], 1, i + 1);
 
@@ -686,8 +696,8 @@ namespace Drill_Namer
                 Size = new System.Drawing.Size(150, 25),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Regular),
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             };
             drillComboBox.Items.Add("ALL");
             for (int i = 0; i < DrillCount; i++)
@@ -720,8 +730,8 @@ namespace Drill_Namer
                 Size = new System.Drawing.Size(150, 25),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Regular),
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             };
             headingComboBox.Items.AddRange(new string[] { "VEREN", "OTHER" });
             headingComboBox.SelectedIndex = 0;
@@ -731,8 +741,8 @@ namespace Drill_Namer
             {
                 Text = "CLIENT",
                 Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White,
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White,
                 AutoSize = true,
                 Location = new System.Drawing.Point(10, nextY)
             };
@@ -767,8 +777,8 @@ namespace Drill_Namer
                 Size = new System.Drawing.Size(100, 25),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Regular),
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             };
             swapComboBox2 = new ComboBox()
             {
@@ -776,8 +786,8 @@ namespace Drill_Namer
                 Size = new System.Drawing.Size(100, 25),
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Regular),
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White
             };
             for (int i = 0; i < DrillCount; i++)
             {
@@ -817,7 +827,7 @@ namespace Drill_Namer
                 Location = new System.Drawing.Point(logoX, logoY),
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
-                BackColor = System.Drawing.Color.Black
+                BackColor = darkBack
             };
             if (System.IO.File.Exists(logoPath))
             {
@@ -838,8 +848,9 @@ namespace Drill_Namer
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Location = new System.Drawing.Point(10, Math.Max(swapButton.Bottom, logoPictureBox.Bottom) + 15),
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White,
+                Margin = new Padding(0, 10, 0, 0)
             };
             drillGroupBox.Controls.Add(bottomPanel);
 
@@ -1022,8 +1033,9 @@ namespace Drill_Namer
             // Status strip
             StatusStrip statusStrip = new StatusStrip()
             {
-                BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                BackColor = darkBack,
+                ForeColor = DrawingColor.White,
+                Dock = DockStyle.Bottom
             };
             ToolStripStatusLabel statusLabel = new ToolStripStatusLabel()
             {
@@ -2280,31 +2292,40 @@ namespace Drill_Namer
 
         private void SetAllButton_Click(object sender, EventArgs e)
         {
-            var confirmResult = MessageBox.Show("Are you sure you want to set DRILLNAME for all drills?",
-                                                "Confirm SET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            var confirmResult = MessageBox.Show(
+                "Are you sure you want to set DRILLNAME for all drills?",
+                "Confirm SET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirmResult != DialogResult.Yes)
             {
                 Logger.LogInfo("Set All operation canceled by the user.");
                 return;
             }
 
+            List<string> changes = new List<string>();
             int updatedCount = 0;
             for (int i = 0; i < DrillCount; i++)
             {
                 string drillName = drillTextBoxes[i].Text.Trim();
                 string defaultName = GetDefaultDrillName(i);
-
                 bool isDefault = string.Equals(drillName, defaultName, StringComparison.OrdinalIgnoreCase);
                 if (!isDefault || i == 0)
                 {
-                    SetDrill(i);
+                    string oldName = drillLabels[i].Text.Trim();
+                    if (!string.Equals(oldName, drillName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        changes.Add($"{defaultName}: '{oldName}' -> '{drillName}'");
+                    }
+                    SetDrill(i, false);
                     updatedCount++;
                 }
             }
 
-            Logger.LogInfo($"Set All operation completed. Total drills updated: {updatedCount}.");
-            MessageBox.Show($"Successfully updated DRILLNAME for {updatedCount} drill(s).", "Set All", MessageBoxButtons.OK, MessageBoxIcon.Information);
             SaveToJson();
+            Logger.LogInfo($"Set All operation completed. Total drills updated: {updatedCount}.");
+            string summary = changes.Count > 0
+                ? $"Updated {updatedCount} drill(s):\n" + string.Join("\n", changes)
+                : "No changes were necessary.";
+            MessageBox.Show(summary, "Set All", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void ResetDrill(int index)
@@ -2894,8 +2915,8 @@ namespace Drill_Namer
                 promptForm.Width = 300;
                 promptForm.Height = 150;
                 promptForm.Text = title;
-                promptForm.BackColor = System.Drawing.Color.Black;
-                promptForm.ForeColor = System.Drawing.Color.White;
+                promptForm.BackColor = DrawingColor.FromArgb(45, 45, 48);
+                promptForm.ForeColor = DrawingColor.White;
                 Label textLabel = new Label() { Left = 10, Top = 20, Text = prompt, AutoSize = true };
                 textLabel.ForeColor = System.Drawing.Color.White;
                 TextBox inputBox = new TextBox() { Left = 10, Top = 50, Width = 260 };
@@ -3353,7 +3374,7 @@ namespace Drill_Namer
             return $"DRILL_{index + 1}";
         }
 
-        private void SetDrill(int index)
+        private void SetDrill(int index, bool showMessage = true)
         {
             string defaultName = GetDefaultDrillName(index);
             string newDrillName = drillTextBoxes[index].Text.Trim();
@@ -3418,16 +3439,22 @@ namespace Drill_Namer
                         if (updatedBlocks > 0)
                         {
                             Logger.LogInfo($"SetDrill => updated {updatedBlocks} attribute(s) for {defaultName}.");
-                            MessageBox.Show($"Updated {updatedBlocks} attribute(s) for {defaultName}.", "Set Drill", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            if (showMessage)
+                            {
+                                MessageBox.Show($"Updated {updatedBlocks} attribute(s) for {defaultName}.", "Set Drill", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
                         }
                         else
                         {
                             Logger.LogWarning($"No DRILL_x attributes found for {defaultName} to update.");
-                            MessageBox.Show($"No DRILL_x attributes found for {defaultName} to update.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            if (showMessage)
+                            {
+                                MessageBox.Show($"No DRILL_x attributes found for {defaultName} to update.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
                         }
                     }
                 }
-                UpdateAttributesWithMatchingValue(oldDrillName, newDrillName);
+                UpdateAttributesWithMatchingValue(oldDrillName, newDrillName, showMessage);
                 drillLabels[index].Text = newDrillName;
                 SaveToJson();
             }
@@ -4126,7 +4153,7 @@ namespace Drill_Namer
                 return table;
             }
         }
-        private void UpdateAttributesWithMatchingValue(string oldValue, string newValue)
+        private void UpdateAttributesWithMatchingValue(string oldValue, string newValue, bool showMessage = true)
         {
             string oldValTrim = oldValue.Trim();
             string newValTrim = newValue.Trim();
@@ -4215,17 +4242,20 @@ namespace Drill_Namer
                 }
             }
 
-            if (updatedCount > 0)
+            if (showMessage)
             {
-                Logger.LogInfo($"Successfully updated {updatedCount} occurrences of '{oldValTrim}' to '{newValTrim}'.");
-                MessageBox.Show($"Replaced '{oldValTrim}' with '{newValTrim}' in {updatedCount} place(s).",
-                                "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            else
-            {
-                Logger.LogWarning($"No attributes found matching '{oldValTrim}'.");
-                MessageBox.Show($"No attributes found matching '{oldValTrim}' to update.",
-                                "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (updatedCount > 0)
+                {
+                    Logger.LogInfo($"Successfully updated {updatedCount} occurrences of '{oldValTrim}' to '{newValTrim}'.");
+                    MessageBox.Show($"Replaced '{oldValTrim}' with '{newValTrim}' in {updatedCount} place(s).",
+                                    "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    Logger.LogWarning($"No attributes found matching '{oldValTrim}'.");
+                    MessageBox.Show($"No attributes found matching '{oldValTrim}' to update.",
+                                    "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
         }
 
@@ -4255,7 +4285,7 @@ namespace Drill_Namer
         public static void ShowFindReplaceForm()
         {
             FindReplaceForm form = new FindReplaceForm();
-            AcApplication.ShowModalDialog(form);
+            AcApplication.ShowModelessDialog(form);
         }
     }
 }
