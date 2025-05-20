@@ -477,7 +477,7 @@ namespace Drill_Namer
         private void InitializeComponent()
         {
             this.SuspendLayout();
-            this.ClientSize = new System.Drawing.Size(600, 650);
+            this.ClientSize = new System.Drawing.Size(1500, 650);
             this.Name = "FindReplaceForm";
             this.Text = "Find and Replace Form";
             this.ResumeLayout(false);
@@ -500,12 +500,15 @@ namespace Drill_Namer
         private void InitializeDynamicControls()
         {
             // Basic form settings
-            this.AutoScroll = false;
+            // Allow scrolling but let the user resize the window manually
+            this.AutoScroll = true;
             this.AutoSize = false;
+            this.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             this.BackColor = System.Drawing.Color.Black;
             this.ForeColor = System.Drawing.Color.White;
             this.Text = "DRILL PROPERTIES";
             this.StartPosition = FormStartPosition.CenterScreen;
+            // Ensure the window can be stretched vertically and horizontally
             this.MinimumSize = new System.Drawing.Size(900, 500);
 
             // Arrays for dynamic controls
@@ -527,9 +530,6 @@ namespace Drill_Namer
                 AutoScroll = true,
                 BackColor = System.Drawing.Color.Black,
                 ForeColor = System.Drawing.Color.White,
-                Location = new System.Drawing.Point(0, 0),
-                Size = new System.Drawing.Size(1100, 600),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Dock = DockStyle.Fill
             };
             this.Controls.Add(mainPanel);
@@ -539,11 +539,12 @@ namespace Drill_Namer
             {
                 Text = "Drill Controls",
                 Location = new System.Drawing.Point(10, 10),
-                AutoSize = true,
+                AutoSize = false,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 BackColor = System.Drawing.Color.Black,
                 ForeColor = System.Drawing.Color.White,
-                Padding = new Padding(10)
+                Padding = new Padding(10),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
             };
             mainPanel.Controls.Add(drillGroupBox);
 
@@ -561,13 +562,9 @@ namespace Drill_Namer
                 Padding = new Padding(5)
             };
 
-            // Set column widths
-            // ------------- column widths -------------
-            // 220 px  = label (plenty of room for long labels)
-            // 600 px  = textbox (≈ 50 chars at 9-pt Segoe UI)
-            // 80 px   = the three action buttons (unchanged)
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));  // Drill Label
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 600F));  // Drill Name
+            // Provide more room for labels and drill names
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 495F));  // Drill Label
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 750F));  // Drill Name
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // HEADING
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // SET
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // RESET
@@ -1050,7 +1047,8 @@ namespace Drill_Namer
             statusStrip.Items.Add(statusLabel);
             drillGroupBox.Controls.Add(statusStrip);
 
-            this.ClientSize = new System.Drawing.Size(1100, 600);
+            // Initial size; user can stretch the window vertically
+            this.ClientSize = new System.Drawing.Size(1500, 600);
             this.DoubleBuffered = true;
         }
 
