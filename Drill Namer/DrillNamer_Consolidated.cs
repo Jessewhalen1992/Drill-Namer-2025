@@ -532,6 +532,8 @@ namespace Drill_Namer
         {
             drillTextBoxes = new TextBox[DrillCount];
             drillLabels = new Label[DrillCount];
+            this.BackColor = System.Drawing.Color.WhiteSmoke;
+            this.Font = new System.Drawing.Font("Segoe UI", 9F);
 
             int controlHeight = 25;  // Standard height for individual buttons
             int labelX = 10;         // X position for labels
@@ -551,7 +553,8 @@ namespace Drill_Namer
                 {
                     Text = $"DRILL_{currentIndex + 1}",
                     Location = new System.Drawing.Point(labelX, controlY),
-                    Size = new System.Drawing.Size(150, controlHeight)
+                    AutoSize = true,
+                    Font = new System.Drawing.Font(this.Font, System.Drawing.FontStyle.Bold)
                 };
                 this.Controls.Add(drillLabels[currentIndex]);
 
@@ -559,7 +562,8 @@ namespace Drill_Namer
                 drillTextBoxes[currentIndex] = new TextBox
                 {
                     Location = new System.Drawing.Point(textboxX, controlY),
-                    Size = new System.Drawing.Size(150, controlHeight)
+                    Size = new System.Drawing.Size(150, controlHeight),
+                    Font = this.Font
                 };
                 this.Controls.Add(drillTextBoxes[currentIndex]);
 
@@ -656,7 +660,7 @@ namespace Drill_Namer
         /// Sets a specific drill to the user-defined name if it doesn't have the default value.
         /// </summary>
         /// <param name="index">Index of the drill (0-based).</param>
-        private void SetDrill(int index)
+        private void SetDrill(int index, bool showMessage = true)
         {
             if (index < 0 || index >= DrillCount) // Ensure valid index
             {
@@ -693,7 +697,10 @@ namespace Drill_Namer
             // Save the updated data to JSON
             SaveData();
 
-            MessageBox.Show($"DRILL_{index + 1} has been set to '{newDrillName}'.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (showMessage)
+            {
+                MessageBox.Show($"DRILL_{index + 1} has been set to '{newDrillName}'.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         /// <summary>
@@ -1015,7 +1022,7 @@ namespace Drill_Namer
             var confirmResult = MessageBox.Show("Are you sure you want to set all drills with your inputs?", "Confirm SET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirmResult == DialogResult.Yes)
             {
-                bool anySetPerformed = false;
+                var changedDrills = new List<int>();
 
                 for (int i = 0; i < DrillCount; i++)
                 {
@@ -1046,14 +1053,14 @@ namespace Drill_Namer
                     if (needsSet)
                     {
                         // Perform the set operation for this drill
-                        SetDrill(i);
-                        anySetPerformed = true;
+                        SetDrill(i, false);
+                        changedDrills.Add(i + 1);
                     }
                 }
-
-                if (anySetPerformed)
+                if (changedDrills.Count > 0)
                 {
-                    MessageBox.Show("All applicable drills have been set with your inputs.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    string drills = string.Join(", ", changedDrills);
+                    MessageBox.Show($"{changedDrills.Count} changes made to drills {drills}.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
