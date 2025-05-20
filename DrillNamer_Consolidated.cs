@@ -159,7 +159,6 @@ namespace Drill_Namer
                     tr.Commit();
                     brId = br.ObjectId;
                 }
-            }
 
             return brId;
         }
