@@ -500,13 +500,16 @@ namespace Drill_Namer
         private void InitializeDynamicControls()
         {
             // Basic form settings
-            this.AutoScroll = false;
-            this.AutoSize = false;
+            // Allow the form to size itself based on the contained controls
+            this.AutoScroll = true;
+            this.AutoSize = true;
+            this.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             this.BackColor = System.Drawing.Color.Black;
             this.ForeColor = System.Drawing.Color.White;
             this.Text = "DRILL PROPERTIES";
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.MinimumSize = new System.Drawing.Size(900, 500);
+            // Allow a smaller minimum size so the window can be resized
+            this.MinimumSize = new System.Drawing.Size(600, 500);
 
             // Arrays for dynamic controls
             drillTextBoxes = new TextBox[DrillCount];
@@ -527,9 +530,6 @@ namespace Drill_Namer
                 AutoScroll = true,
                 BackColor = System.Drawing.Color.Black,
                 ForeColor = System.Drawing.Color.White,
-                Location = new System.Drawing.Point(0, 0),
-                Size = new System.Drawing.Size(1100, 600),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Dock = DockStyle.Fill
             };
             this.Controls.Add(mainPanel);
@@ -561,16 +561,12 @@ namespace Drill_Namer
                 Padding = new Padding(5)
             };
 
-            // Set column widths
-            // ------------- column widths -------------
-            // 220 px  = label (plenty of room for long labels)
-            // 600 px  = textbox (≈ 50 chars at 9-pt Segoe UI)
-            // 80 px   = the three action buttons (unchanged)
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));  // Drill Label
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 600F));  // Drill Name
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // HEADING
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // SET
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // RESET
+            // Set column widths using percentages so the layout adapts to the form size
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));  // Drill Label
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));  // Drill Name
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10F));  // HEADING
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10F));  // SET
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10F));  // RESET
 
             // Header row
             tableLayout.Controls.Add(new Label
@@ -1050,7 +1046,8 @@ namespace Drill_Namer
             statusStrip.Items.Add(statusLabel);
             drillGroupBox.Controls.Add(statusStrip);
 
-            this.ClientSize = new System.Drawing.Size(1100, 600);
+            // Initial size; will grow if needed due to AutoSize
+            this.ClientSize = new System.Drawing.Size(900, 600);
             this.DoubleBuffered = true;
         }
 
