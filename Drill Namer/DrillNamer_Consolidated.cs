@@ -1,3 +1,4 @@
+// NOTE: Ensure the project is targeting x64 in Visual Studio to match AutoCAD DLLs.
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -158,7 +159,6 @@ namespace Drill_Namer
                 tr.Commit();
                 brId = br.ObjectId;
             }
-        }
 
             return brId;
         }
