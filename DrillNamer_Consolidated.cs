@@ -25,32 +25,6 @@ using FormsFlowDirection = System.Windows.Forms.FlowDirection;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Drill Namer")]
-[assembly: AssemblyDescription("")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Drill Namer")]
-[assembly: AssemblyCopyright("Copyright ©  2024")]
-[assembly: AssemblyTrademark("")]
-[assembly: AssemblyCulture("")]
-
-// Setting ComVisible to false makes the types in this assembly not visible
-// to COM components.  If you need to access a type in this assembly from
-// COM, set the ComVisible attribute to true on that type.
-[assembly: ComVisible(false)]
-
-// The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("22473b76-d2f6-4d29-8e92-46d5d4f1134a")]
-
-// Version information for an assembly consists of the following four values:
-//
-//      Major Version
-//      Minor Version
-//      Build Number
-//      Revision
-//
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
 
 namespace Drill_Namer
 {
@@ -61,7 +35,7 @@ namespace Drill_Namer
         /// </summary>
         public static Transaction StartTransaction()
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             return doc.Database.TransactionManager.StartTransaction();
         }
 
@@ -74,7 +48,7 @@ namespace Drill_Namer
         public static bool GetInsertionPoint(string promptMessage, out Point3d insertionPoint)
         {
             insertionPoint = Point3d.Origin;
-            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             if (doc == null) return false;
 
             Editor ed = doc.Editor;
@@ -100,12 +74,12 @@ namespace Drill_Namer
             Dictionary<string, string> attributes,
             double scale = 1.0)
         {
-            Document doc = Application.DocumentManager.MdiActiveDocument;
+            Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Database db = doc.Database;
             ObjectId brId = ObjectId.Null;
 
             // Make sure we lock the doc for changes
-            {
+            using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
                     // 1) Ensure the block is loaded into this DWG
                     if (!EnsureBlockIsLoaded(db, blockName))
@@ -196,6 +170,7 @@ namespace Drill_Namer
         private static bool EnsureBlockIsLoaded(Database db, string blockName)
         {
             bool exists = false;
+            using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                 exists = bt.Has(blockName);
@@ -225,40 +200,38 @@ namespace Drill_Namer
                 return ObjectId.Null;
 
             ObjectId result = ObjectId.Null;
+            using (Database tempDb = new Database(false, true))
             {
                 try
                 {
-                    // read the .dwg containing the block
                     tempDb.ReadDwgFile(sourceDwgPath, FileShare.Read, true, "");
+                    using (Transaction tr = tempDb.TransactionManager.StartTransaction())
                     {
                         BlockTable sourceBT = (BlockTable)tr.GetObject(tempDb.BlockTableId, OpenMode.ForRead);
                         if (!sourceBT.Has(blockName))
                         {
-                            // blockName does not exist in that DWG
                             return ObjectId.Null;
                         }
 
-                        // get the block's btr
                         ObjectId sourceBtrId = sourceBT[blockName];
                         ObjectIdCollection idsToClone = new ObjectIdCollection();
                         idsToClone.Add(sourceBtrId);
 
                         tr.Commit();
 
-                        // now clone it into destDb
-                        IdMapping mapping = new IdMapping();
-                        destDb.WblockCloneObjects(idsToClone, destDb.BlockTableId, mapping,
-                            DuplicateRecordCloning.Replace, false);
-                    }
-
-                    // verify we have it
-                    {
-                        BlockTable destBT = (BlockTable)destTr.GetObject(destDb.BlockTableId, OpenMode.ForRead);
-                        if (destBT.Has(blockName))
+                        using (Transaction destTr = destDb.TransactionManager.StartTransaction())
                         {
-                            result = destBT[blockName];
+                            IdMapping mapping = new IdMapping();
+                            destDb.WblockCloneObjects(idsToClone, destDb.BlockTableId, mapping,
+                                DuplicateRecordCloning.Replace, false);
+
+                            BlockTable destBT = (BlockTable)destTr.GetObject(destDb.BlockTableId, OpenMode.ForRead);
+                            if (destBT.Has(blockName))
+                            {
+                                result = destBT[blockName];
+                            }
+                            destTr.Commit();
                         }
-                        destTr.Commit();
                     }
                 }
                 catch
@@ -276,6 +249,7 @@ namespace Drill_Namer
         private static bool CreateLayerIfMissing(Database db, string layerName)
         {
             bool success = false;
+            using (Transaction tr = db.TransactionManager.StartTransaction())
             {
                 LayerTable lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
                 if (lt.Has(layerName))
@@ -284,11 +258,9 @@ namespace Drill_Namer
                 }
                 else
                 {
-                    // create the layer
                     lt.UpgradeOpen();
                     LayerTableRecord ltr = new LayerTableRecord();
                     ltr.Name = layerName;
-                    // optionally set color, line type, etc.
                     lt.Add(ltr);
                     tr.AddNewlyCreatedDBObject(ltr, true);
 
@@ -340,7 +312,7 @@ namespace Drill_Namer
 
                 logger = LogManager.GetCurrentClassLogger();
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 try
                 {
@@ -365,7 +337,7 @@ namespace Drill_Namer
         {
             try
             {
-                Document acDoc = Application.DocumentManager.MdiActiveDocument;
+                Document acDoc = AcApplication.DocumentManager.MdiActiveDocument;
                 if (acDoc != null && acDoc.IsNamedDrawing && !string.IsNullOrEmpty(acDoc.Name))
                 {
                     string drawingDirectory = Path.GetDirectoryName(acDoc.Name);
@@ -448,11 +420,11 @@ namespace Drill_Namer
         static void Main()
         {
             // Enable visual styles and set text rendering
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
+            System.Windows.Forms.Application.EnableVisualStyles();
+            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
             // Run the main form
-            Application.Run(new FindReplaceForm());
+            System.Windows.Forms.Application.Run(new FindReplaceForm());
         }
     }
 }
@@ -851,6 +823,7 @@ namespace Drill_Namer
             Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Editor ed = doc.Editor;
 
+            using (Transaction tr = doc.TransactionManager.StartTransaction())
             {
                 BlockTable bt = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
 
@@ -975,6 +948,7 @@ namespace Drill_Namer
             Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Editor ed = doc.Editor;
 
+            using (Transaction tr = doc.TransactionManager.StartTransaction())
             {
                 BlockTable bt = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
 
@@ -1190,7 +1164,8 @@ namespace Drill_Namer
                 SelectionSet selectionSet = result.Value;
                 var selectedObjects = selectionSet.GetObjectIds();
 
-                {
+                using (Transaction tr = acDoc.TransactionManager.StartTransaction())
+            {
                     foreach (var objectId in selectedObjects)
                     {
                         var blockRef = tr.GetObject(objectId, OpenMode.ForRead) as BlockReference;
@@ -1233,7 +1208,7 @@ namespace Drill_Namer
 
                 MessageBox.Show("Updated fields from block attributes.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Failed to update from block attributes: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -1249,6 +1224,7 @@ namespace Drill_Namer
             Document doc = AcApplication.DocumentManager.MdiActiveDocument;
             Editor ed = doc.Editor;
 
+            using (Transaction tr = doc.TransactionManager.StartTransaction())
             {
                 BlockTable blockTable = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
 
@@ -1299,7 +1275,7 @@ namespace Drill_Namer
             {
                 File.WriteAllText(jsonFilePath, JsonConvert.SerializeObject(drillNames, Formatting.Indented));
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Failed to save JSON: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -1374,7 +1350,7 @@ namespace Drill_Namer
                 InitializeDefaultDrills();
                 SaveToJson();
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 MessageBox.Show($"Failed to load JSON: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
