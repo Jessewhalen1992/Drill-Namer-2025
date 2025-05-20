@@ -505,6 +505,10 @@ namespace Drill_Namer
             this.BackColor = System.Drawing.Color.Black;
             this.ForeColor = System.Drawing.Color.White;
             this.Text = "DRILL PROPERTIES";
+            this.StartPosition = FormStartPosition.CenterScreen;
+            // Give the form a wider minimum size so the drill name fields are
+            // fully visible
+            this.MinimumSize = new System.Drawing.Size(1300, 600);
 
             // Arrays for dynamic controls
             drillTextBoxes = new TextBox[DrillCount];
@@ -526,8 +530,10 @@ namespace Drill_Namer
                 BackColor = System.Drawing.Color.Black,
                 ForeColor = System.Drawing.Color.White,
                 Location = new System.Drawing.Point(0, 0),
-                Size = new System.Drawing.Size(1100, 600),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+                // Expand the panel to match the wider form
+                Size = new System.Drawing.Size(1300, 600),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                Dock = DockStyle.Fill
             };
             this.Controls.Add(mainPanel);
 
@@ -539,7 +545,8 @@ namespace Drill_Namer
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                ForeColor = System.Drawing.Color.White,
+                Padding = new Padding(10)
             };
             mainPanel.Controls.Add(drillGroupBox);
 
@@ -552,12 +559,15 @@ namespace Drill_Namer
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                ForeColor = System.Drawing.Color.White,
+                Dock = DockStyle.Top,
+                Padding = new Padding(5)
             };
 
             // Set column widths
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300F));  // DRILL Label
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300F));  // DRILL Name
+            // Make the drill name column wider so text is not clipped
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 600F));  // DRILL Name
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // HEADING
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // SET
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));   // RESET
@@ -697,20 +707,6 @@ namespace Drill_Namer
             drillComboBox.SelectedIndex = 0;
             drillGroupBox.Controls.Add(drillComboBox);
 
-            // Generate JSON button
-            generateJsonButton = new Button
-            {
-                Text = "Generate JSON",
-                Location = new System.Drawing.Point(drillComboBox.Right + 10, nextY),
-                Size = new System.Drawing.Size(120, 25),
-                Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
-                BackColor = System.Drawing.Color.Gold,
-                ForeColor = System.Drawing.Color.Black,
-                FlatStyle = FlatStyle.Flat
-            };
-            generateJsonButton.Click += GenerateJsonButton_Click;
-            drillGroupBox.Controls.Add(generateJsonButton);
-
             nextY = drillComboBox.Bottom + 20;
 
             // Heading type ComboBox
@@ -839,7 +835,8 @@ namespace Drill_Namer
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Location = new System.Drawing.Point(10, Math.Max(swapButton.Bottom, logoPictureBox.Bottom) + 15),
                 BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                ForeColor = System.Drawing.Color.White,
+                Margin = new Padding(0, 10, 0, 0)
             };
             drillGroupBox.Controls.Add(bottomPanel);
 
@@ -876,13 +873,25 @@ namespace Drill_Namer
 
             bottomPanel.Controls.Add(row1);
 
-            // ROW 2: CHECK, WELL CORNERS, HEADING ALL
+            // ROW 2: HEADING ALL, CHECK, WELL CORNERS
             FlowLayoutPanel row2 = new FlowLayoutPanel()
             {
                 FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight, // <-- Fully qualify
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
+            headingAllButton = new Button()
+            {
+                Text = "HEADING ALL",
+                Size = new System.Drawing.Size(100, 30),
+                Font = buttonFont,
+                BackColor = System.Drawing.Color.DarkGreen,
+                ForeColor = System.Drawing.Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            headingAllButton.Click += HeadingAllButton_Click;
+            row2.Controls.Add(headingAllButton);
+
             checkButton = new Button()
             {
                 Text = "CHECK",
@@ -906,18 +915,6 @@ namespace Drill_Namer
             };
             wellCornersButton.Click += WellCornersButton_Click;
             row2.Controls.Add(wellCornersButton);
-
-            headingAllButton = new Button()
-            {
-                Text = "HEADING ALL",
-                Size = new System.Drawing.Size(100, 30),
-                Font = buttonFont,
-                BackColor = System.Drawing.Color.DarkGreen,
-                ForeColor = System.Drawing.Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            headingAllButton.Click += HeadingAllButton_Click;
-            row2.Controls.Add(headingAllButton);
 
             bottomPanel.Controls.Add(row2);
 
@@ -1017,13 +1014,27 @@ namespace Drill_Namer
             };
             updateOffsetsButton.Click += UpdateOffsetsButton_Click;
             row5.Controls.Add(updateOffsetsButton);
+
+            // Move the JSON generator to the bottom with other utilities
+            generateJsonButton = new Button
+            {
+                Text = "GENERATE JSON",
+                Size = new System.Drawing.Size(140, 30),
+                Font = buttonFont,
+                BackColor = System.Drawing.Color.Gold,
+                ForeColor = System.Drawing.Color.Black,
+                FlatStyle = FlatStyle.Flat
+            };
+            generateJsonButton.Click += GenerateJsonButton_Click;
+            row5.Controls.Add(generateJsonButton);
             bottomPanel.Controls.Add(row5);
 
             // Status strip
             StatusStrip statusStrip = new StatusStrip()
             {
                 BackColor = System.Drawing.Color.Black,
-                ForeColor = System.Drawing.Color.White
+                ForeColor = System.Drawing.Color.White,
+                Dock = DockStyle.Bottom
             };
             ToolStripStatusLabel statusLabel = new ToolStripStatusLabel()
             {
@@ -1034,7 +1045,8 @@ namespace Drill_Namer
             statusStrip.Items.Add(statusLabel);
             drillGroupBox.Controls.Add(statusStrip);
 
-            this.ClientSize = new System.Drawing.Size(1100, 600);
+            // Match the widened layout
+            this.ClientSize = new System.Drawing.Size(1300, 600);
             this.DoubleBuffered = true;
         }
 
@@ -2280,31 +2292,38 @@ namespace Drill_Namer
 
         private void SetAllButton_Click(object sender, EventArgs e)
         {
-            var confirmResult = MessageBox.Show("Are you sure you want to set DRILLNAME for all drills?",
-                                                "Confirm SET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            var confirmResult = MessageBox.Show(
+                "Are you sure you want to set DRILLNAME for all drills?",
+                "Confirm SET ALL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (confirmResult != DialogResult.Yes)
             {
                 Logger.LogInfo("Set All operation canceled by the user.");
                 return;
             }
 
+            List<string> changes = new List<string>();
             int updatedCount = 0;
             for (int i = 0; i < DrillCount; i++)
             {
                 string drillName = drillTextBoxes[i].Text.Trim();
                 string defaultName = GetDefaultDrillName(i);
-
                 bool isDefault = string.Equals(drillName, defaultName, StringComparison.OrdinalIgnoreCase);
                 if (!isDefault || i == 0)
                 {
-                    SetDrill(i);
+                    string oldName = drillLabels[i].Text.Trim();
+                    if (!string.Equals(oldName, drillName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        changes.Add($"{defaultName}: '{oldName}' -> '{drillName}'");
+                    }
+                    SetDrill(i, false);
                     updatedCount++;
                 }
             }
 
-            Logger.LogInfo($"Set All operation completed. Total drills updated: {updatedCount}.");
-            MessageBox.Show($"Successfully updated DRILLNAME for {updatedCount} drill(s).", "Set All", MessageBoxButtons.OK, MessageBoxIcon.Information);
             SaveToJson();
+            Logger.LogInfo($"Set All operation completed. Total drills updated: {updatedCount}.");
+            string summary = changes.Count > 0 ? string.Join("\n", changes) : "No changes were necessary.";
+            MessageBox.Show(summary, "Set All", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void ResetDrill(int index)
@@ -3353,7 +3372,7 @@ namespace Drill_Namer
             return $"DRILL_{index + 1}";
         }
 
-        private void SetDrill(int index)
+        private void SetDrill(int index, bool showMessage = true)
         {
             string defaultName = GetDefaultDrillName(index);
             string newDrillName = drillTextBoxes[index].Text.Trim();
@@ -3418,12 +3437,18 @@ namespace Drill_Namer
                         if (updatedBlocks > 0)
                         {
                             Logger.LogInfo($"SetDrill => updated {updatedBlocks} attribute(s) for {defaultName}.");
-                            MessageBox.Show($"Updated {updatedBlocks} attribute(s) for {defaultName}.", "Set Drill", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            if (showMessage)
+                            {
+                                MessageBox.Show($"Updated {updatedBlocks} attribute(s) for {defaultName}.", "Set Drill", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
                         }
                         else
                         {
                             Logger.LogWarning($"No DRILL_x attributes found for {defaultName} to update.");
-                            MessageBox.Show($"No DRILL_x attributes found for {defaultName} to update.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            if (showMessage)
+                            {
+                                MessageBox.Show($"No DRILL_x attributes found for {defaultName} to update.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
                         }
                     }
                 }
