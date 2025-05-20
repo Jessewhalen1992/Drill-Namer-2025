@@ -164,111 +164,105 @@ namespace Drill_Namer
         }
 
         /// <summary>
-        /// Attempt to ensure the block definition is present in the current DB.
-        /// If missing, tries to load it from "C:\AUTOCAD-SETUP\Lisp_2000\Drill Properties\blockName.dwg".
+        /// Ensures that a block definition is available in the drawing.
+        /// If the block is missing, this method attempts to read it from the
+        /// standard block library on disk.
         /// </summary>
         private static bool EnsureBlockIsLoaded(Database db, string blockName)
         {
-            bool exists = false;
+            bool exists;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                BlockTable bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
                 exists = bt.Has(blockName);
                 tr.Commit();
             }
-            if (exists) return true;
 
-            // If not found, try to import from external .dwg
-            string baseFolder = @"C:\AUTOCAD-SETUP\Lisp_2000\Drill Properties";
-            string dwgPath = Path.Combine(baseFolder, blockName + ".dwg");
+            if (exists)
+                return true;
+
+            string libraryFolder = @"C:\AUTOCAD-SETUP\Lisp_2000\Drill Properties";
+            string dwgPath = Path.Combine(libraryFolder, blockName + ".dwg");
             if (!File.Exists(dwgPath))
             {
-                // can't find the external block .dwg
-                return false;
+                return false; // external definition not found
             }
 
-            return (ImportBlockDefinition(db, dwgPath, blockName) != ObjectId.Null);
+            return ImportBlockDefinition(db, dwgPath, blockName) != ObjectId.Null;
         }
 
         /// <summary>
-        /// Imports a DWG file (which is effectively a single block definition) into the current DB
-        /// with DuplicateRecordCloning.Replace (so we re-use the name).
+        /// Imports a block definition from an external DWG file into the
+        /// specified database. The imported definition replaces any existing
+        /// one with the same name.
         /// </summary>
         private static ObjectId ImportBlockDefinition(Database destDb, string sourceDwgPath, string blockName)
         {
             if (destDb == null || string.IsNullOrEmpty(sourceDwgPath) || !File.Exists(sourceDwgPath))
                 return ObjectId.Null;
 
-            ObjectId result = ObjectId.Null;
-            using (Database tempDb = new Database(false, true))
+            ObjectId importedId = ObjectId.Null;
+            using (Database sourceDb = new Database(false, true))
             {
                 try
                 {
-                    tempDb.ReadDwgFile(sourceDwgPath, FileShare.Read, true, "");
-                    using (Transaction tr = tempDb.TransactionManager.StartTransaction())
+                    sourceDb.ReadDwgFile(sourceDwgPath, FileShare.Read, true, string.Empty);
+                    using (Transaction srcTr = sourceDb.TransactionManager.StartTransaction())
                     {
-                        BlockTable sourceBT = (BlockTable)tr.GetObject(tempDb.BlockTableId, OpenMode.ForRead);
-                        if (!sourceBT.Has(blockName))
-                        {
+                        BlockTable srcBt = srcTr.GetObject(sourceDb.BlockTableId, OpenMode.ForRead) as BlockTable;
+                        if (!srcBt.Has(blockName))
                             return ObjectId.Null;
-                        }
 
-                        ObjectId sourceBtrId = sourceBT[blockName];
-                        ObjectIdCollection idsToClone = new ObjectIdCollection();
-                        idsToClone.Add(sourceBtrId);
-
-                        tr.Commit();
+                        ObjectIdCollection ids = new ObjectIdCollection { srcBt[blockName] };
+                        srcTr.Commit();
 
                         using (Transaction destTr = destDb.TransactionManager.StartTransaction())
                         {
-                            IdMapping mapping = new IdMapping();
-                            destDb.WblockCloneObjects(idsToClone, destDb.BlockTableId, mapping,
-                                DuplicateRecordCloning.Replace, false);
+                            IdMapping map = new IdMapping();
+                            destDb.WblockCloneObjects(ids, destDb.BlockTableId, map, DuplicateRecordCloning.Replace, false);
 
-                            BlockTable destBT = (BlockTable)destTr.GetObject(destDb.BlockTableId, OpenMode.ForRead);
-                            if (destBT.Has(blockName))
-                            {
-                                result = destBT[blockName];
-                            }
+                            BlockTable destBt = destTr.GetObject(destDb.BlockTableId, OpenMode.ForRead) as BlockTable;
+                            if (destBt.Has(blockName))
+                                importedId = destBt[blockName];
+
                             destTr.Commit();
                         }
                     }
                 }
                 catch
                 {
-                    // do nothing
+                    // ignore errors and return null
                 }
             }
 
-            return result;
+            return importedId;
         }
 
         /// <summary>
-        /// Creates or verifies that layerName exists. Returns true if found or created successfully.
+        /// Creates <paramref name="layerName"/> if it does not already exist.
+        /// Returns <c>true</c> when the layer is available.
         /// </summary>
         private static bool CreateLayerIfMissing(Database db, string layerName)
         {
-            bool success = false;
+            bool exists;
             using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                LayerTable lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                LayerTable lt = tr.GetObject(db.LayerTableId, OpenMode.ForRead) as LayerTable;
                 if (lt.Has(layerName))
                 {
-                    success = true;
+                    exists = true;
                 }
                 else
                 {
                     lt.UpgradeOpen();
-                    LayerTableRecord ltr = new LayerTableRecord();
-                    ltr.Name = layerName;
-                    lt.Add(ltr);
-                    tr.AddNewlyCreatedDBObject(ltr, true);
-
-                    success = true;
+                    LayerTableRecord rec = new LayerTableRecord { Name = layerName };
+                    lt.Add(rec);
+                    tr.AddNewlyCreatedDBObject(rec, true);
+                    exists = true;
                 }
                 tr.Commit();
             }
-            return success;
+            return exists;
         }
     }
 }
