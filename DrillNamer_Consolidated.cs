@@ -561,9 +561,9 @@ namespace Drill_Namer
             };
 
             // Give labels and names more room
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));  // Drill Label
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));  // Drill Name
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6F));   // HEADING
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28F));  // Drill Label
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48F));  // Drill Name
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10F));  // HEADING
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7F));   // SET
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7F));   // RESET
 
@@ -4280,7 +4280,7 @@ namespace Drill_Namer
         public static void ShowFindReplaceForm()
         {
             FindReplaceForm form = new FindReplaceForm();
-            AcApplication.ShowModalDialog(form);
+            AcApplication.ShowModelessDialog(form);
         }
     }
 }

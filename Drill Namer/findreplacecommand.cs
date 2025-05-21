@@ -13,8 +13,8 @@ namespace Drill_Namer
         {
             // Create and show the form
             FindReplaceForm form = new FindReplaceForm();
-            // Shows the form as a modal dialog (i.e., waits for user input before continuing).
-            acadApp.ShowModalDialog(form);
+            // Display the form modelessly so AutoCAD remains accessible.
+            acadApp.ShowModelessDialog(form);
         }
     }
 }
