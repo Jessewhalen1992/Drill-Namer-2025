@@ -563,9 +563,9 @@ namespace Drill_Namer
             // Give labels and names more room
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));  // Drill Label
             tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));  // Drill Name
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6F));   // HEADING
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7F));   // SET
-            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7F));   // RESET
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 8F));   // HEADING (wider so text isn't cut off)
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6F));   // SET
+            tableLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6F));   // RESET
 
             // Header row
             tableLayout.Controls.Add(new Label
@@ -4280,7 +4280,8 @@ namespace Drill_Namer
         public static void ShowFindReplaceForm()
         {
             FindReplaceForm form = new FindReplaceForm();
-            AcApplication.ShowModalDialog(form);
+            // Show the form modelessly so AutoCAD remains usable while it is open
+            AcApplication.ShowModelessDialog(form);
         }
     }
 }
