@@ -1,0 +1,1 @@
+bash<br>#!/usr/bin/env bash<br>set -euxo pipefail<br>curl -SL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel LTS --install-dir "$HOME/dotnet"<br>echo 'export PATH=$HOME/dotnet:$PATH' >> "$BASH_ENV"<br>
