@@ -49,22 +49,32 @@ public class FindReplaceForm : Form
                 {
                     if (tr.GetObject(entId, OpenMode.ForRead) is BlockReference blkRef)
                     {
-                        foreach (ObjectId attId in blkRef.AttributeCollection)
+                        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                        var ltr = (LayerTableRecord)tr.GetObject(lt[blkRef.Layer], OpenMode.ForWrite);
+                        bool wasLocked = ltr.IsLocked;
+
+                        try
                         {
-                            // 1️⃣  open read-only
-                            var att = (AttributeReference)tr.GetObject(attId, OpenMode.ForRead);
-                            if (!att.TextString.Equals(oldValue, StringComparison.OrdinalIgnoreCase))
-                                continue;
+                            if (wasLocked)
+                                ltr.IsLocked = false;
 
-                            // 2️⃣ unlock the block's layer, then write
-                            RunWithLayerUnlocked(tr, blkRef.LayerId, () =>
+                            foreach (ObjectId attId in blkRef.AttributeCollection)
                             {
-                                att.UpgradeOpen();              // safe: layer is writable
-                                att.TextString = newValue;
-                                att.DowngradeOpen();
-                            });
+                                var attRef = (AttributeReference)tr.GetObject(attId, OpenMode.ForRead);
+                                if (!attRef.TextString.Equals(oldValue, StringComparison.OrdinalIgnoreCase))
+                                    continue;
 
-                            updated++;
+                                attRef.UpgradeOpen();
+                                attRef.TextString = newValue.Trim();
+                                attRef.DowngradeOpen();
+
+                                updated++;
+                            }
+                        }
+                        finally
+                        {
+                            if (wasLocked)
+                                ltr.IsLocked = true;
                         }
                     }
                 }
