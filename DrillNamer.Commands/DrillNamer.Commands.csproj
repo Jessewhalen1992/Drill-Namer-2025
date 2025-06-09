@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net40;net48</TargetFrameworks>
+    <TargetFrameworks>net40;net48;net8.0</TargetFrameworks>
     <DefineConstants>CAD_PLUGIN;$(DefineConstants)</DefineConstants>
     <AssemblyName>DrillNamer</AssemblyName>
   <RootNamespace>DrillNamer.Commands</RootNamespace>
@@ -9,7 +9,10 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)'=='net48'">
     <Nullable>enable</Nullable>
-</PropertyGroup>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)'=='net8.0'">
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
 
   <!-- net40 build uses R19 (2014) DLLs -->
   <ItemGroup Condition="'$(TargetFramework)'=='net40'">
@@ -24,16 +27,28 @@
     <Reference Include="acmgd" HintPath="external\ARX2025\acmgd.dll" Private="false" />
     <Reference Include="accoremgd" HintPath="external\ARX2025\accoremgd.dll" Private="false" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net8.0'">
+    <Reference Include="acdbmgd" HintPath="external\ARX2025\acdbmgd.dll" Private="false" />
+    <Reference Include="acmgd" HintPath="external\ARX2025\acmgd.dll" Private="false" />
+    <Reference Include="accoremgd" HintPath="external\ARX2025\accoremgd.dll" Private="false" />
+  </ItemGroup>
 
   <Target Name="EnsureArxDllsPresent" BeforeBuild">
     <Error Condition="'$(TargetFramework)'=='net40' and !Exists('external\ARX2014\acdbmgd.dll')" Text="Missing AutoCAD ARX2014 DLLs. Copy acdbmgd.dll, acmgd.dll and accoremgd.dll to external/ARX2014." />
     <Error Condition="'$(TargetFramework)'=='net48' and !Exists('external\ARX2025\acdbmgd.dll')" Text="Missing AutoCAD ARX2025 DLLs. Copy acdbmgd.dll, acmgd.dll and accoremgd.dll to external/ARX2025." />
+    <Error Condition="'$(TargetFramework)'=='net8.0' and !Exists('external\ARX2025\acdbmgd.dll')" Text="Missing AutoCAD ARX2025 DLLs. Copy acdbmgd.dll, acmgd.dll and accoremgd.dll to external/ARX2025." />
   </Target>
   <ItemGroup Condition="'$(TargetFramework)'=='net40'">
     <Reference Include="acdbmgd, Version=18.0.0.0" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)'=='net48'">
     <Reference Include="acdbmgd, Version=24.3.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net8.0'">
+    <Reference Include="acdbmgd, Version=24.3.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net48' Or '$(TargetFramework)'=='net8.0'">
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DrillNamer.Core\DrillNamer.Core.csproj" />
