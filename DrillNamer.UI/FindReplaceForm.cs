@@ -37,6 +37,7 @@ public class FindReplaceForm : Form
         Document doc = Application.DocumentManager.MdiActiveDocument;
         Database db = doc.Database;
         int updated = 0;
+        string newValTrim = newValue.Trim();
 
         using (DocumentLock dlock = doc.LockDocument())
         using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -65,7 +66,7 @@ public class FindReplaceForm : Form
                                     continue;
 
                                 attRef.UpgradeOpen();
-                                attRef.TextString = newValue.Trim();
+                                attRef.TextString = newValTrim;
                                 attRef.DowngradeOpen();
 
                                 updated++;
