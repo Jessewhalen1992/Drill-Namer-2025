@@ -260,25 +260,5 @@ namespace Drill_Namer
             }
             return success;
         }
-        /// <summary>
-        /// Temporarily unlocks a layer, executes <paramref name="action"/>, then restores the original lock state (inside the same Tx).
-        /// </summary>
-        internal static void RunWithLayerUnlocked(Transaction tr, ObjectId layerId, System.Action action)
-        {
-            var ltr = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
-            bool relock = ltr.IsLocked;
-            if (relock)
-            {
-                Logger.LogDebug($"Temporarily unlocked layer '{ltr.Name}'");
-                ltr.IsLocked = false;
-            }
-
-            action?.Invoke();
-
-            if (relock)
-            {
-                ltr.IsLocked = true;
-            }
-        }
     }
 }
