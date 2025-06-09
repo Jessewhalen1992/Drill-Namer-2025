@@ -1850,7 +1850,7 @@ namespace Drill_Namer
                         if (btr == null) continue;
                         foreach (ObjectId entId in btr)
                         {
-                            Entity ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
+                            Entity ent = tr.GetObject(entId, OpenMode.ForRead, false) as Entity;
                             if (ent is BlockReference blockRef)
                             {
                                 string tag1 = $"DRILL_{index1 + 1}";
@@ -1940,7 +1940,7 @@ namespace Drill_Namer
                                 Entity ent = null;
                                 try
                                 {
-                                    ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
+                                    ent = tr.GetObject(entId, OpenMode.ForRead, false) as Entity;
                                 }
                                 catch { continue; }
                                 if (ent == null || ent.IsErased)
@@ -1953,7 +1953,7 @@ namespace Drill_Namer
                                         AttributeReference attRef = null;
                                         try
                                         {
-                                            attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                                            attRef = tr.GetObject(attId, OpenMode.ForRead, false) as AttributeReference;
                                         }
                                         catch { continue; }
                                         if (attRef == null || attRef.IsErased)
@@ -2040,7 +2040,7 @@ namespace Drill_Namer
                                 Entity ent = null;
                                 try
                                 {
-                                    ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
+                                    ent = tr.GetObject(entId, OpenMode.ForRead, false) as Entity;
                                 }
                                 catch { continue; }
                                 if (ent == null || ent.IsErased)
@@ -2059,7 +2059,7 @@ namespace Drill_Namer
                                             AttributeReference attRef = null;
                                             try
                                             {
-                                                attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                                                attRef = tr.GetObject(attId, OpenMode.ForRead, false) as AttributeReference;
                                             }
                                             catch { continue; }
                                             if (attRef == null || attRef.IsErased)
@@ -2861,7 +2861,7 @@ namespace Drill_Namer
         {
             foreach (ObjectId attId in blockRef.AttributeCollection)
             {
-                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForRead, false) as AttributeReference;
                 if (attRef != null && attRef.Tag.Equals(tag, StringComparison.OrdinalIgnoreCase))
                 {
                     attRef.TextString = newValue;
@@ -2873,7 +2873,7 @@ namespace Drill_Namer
         {
             foreach (ObjectId attId in blockRef.AttributeCollection)
             {
-                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForRead, false) as AttributeReference;
                 if (attRef == null) continue;
                 if (attRef.Tag.Equals(tag, StringComparison.OrdinalIgnoreCase))
                 {
@@ -2971,7 +2971,7 @@ namespace Drill_Namer
                                 Entity ent;
                                 try
                                 {
-                                    ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
+                                    ent = tr.GetObject(entId, OpenMode.ForRead, false) as Entity;
                                 }
                                 catch
                                 {
@@ -2986,7 +2986,7 @@ namespace Drill_Namer
                                         AttributeReference attRef;
                                         try
                                         {
-                                            attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                                            attRef = tr.GetObject(attId, OpenMode.ForRead, false) as AttributeReference;
                                         }
                                         catch
                                         {
@@ -3743,7 +3743,7 @@ namespace Drill_Namer
                             Entity ent = null;
                             try
                             {
-                                ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
+                                ent = tr.GetObject(entId, OpenMode.ForRead, false) as Entity;
                             }
                             catch (Autodesk.AutoCAD.Runtime.Exception ex)
                             {
@@ -3763,7 +3763,7 @@ namespace Drill_Namer
                                     AttributeReference attRef;
                                     try
                                     {
-                                        attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                                        attRef = tr.GetObject(attId, OpenMode.ForRead, false) as AttributeReference;
                                     }
                                     catch (Autodesk.AutoCAD.Runtime.Exception ex)
                                     {
@@ -3778,10 +3778,15 @@ namespace Drill_Namer
                                         continue;
                                     if (attRef.TextString.Trim().Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
                                     {
-                                        attRef.TextString = newValTrim;
-                                        updatedCount++;
+                                        RunWithLayerUnlocked(tr, attRef.LayerId, () =>
+                                        {
+                                            attRef.UpgradeOpen();
+                                            attRef.TextString = newValTrim;
+                                            attRef.DowngradeOpen();
+                                        });
                                     }
                                 }
+                                        updatedCount++;
                             }
                             else if (ent is DBText dbText)
                             {
