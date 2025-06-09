@@ -17,6 +17,7 @@ public class AttributeUtilsTests
     [TestCase("1-2-3", false)]
     public void MatchesDrillTag_DetectsPattern(string input, bool expected)
     {
+        var path = @"C:\temp\file.txt";
         Assert.AreEqual(expected, AttributeUtils.MatchesDrillTag(input));
     }
 }
