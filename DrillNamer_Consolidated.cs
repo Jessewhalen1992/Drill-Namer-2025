@@ -2231,6 +2231,7 @@ namespace Drill_Namer
         /// Helper method to determine if a text string is a grid label in the range A1–L12.
         /// </summary>
 
+        // Updated SwapButton_Click to call the new SwapDrillAttribute overload:
         private void SwapButton_Click(object sender, EventArgs e)
         {
             Document doc = AcApplication.DocumentManager.MdiActiveDocument;
@@ -2261,15 +2262,16 @@ namespace Drill_Namer
             drillLabels[index2].Text = newLabel2;
 
             using (DocumentLock docLock = doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                using (Transaction tr = db.TransactionManager.StartTransaction())
+                BlockTable bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                if (bt != null)
                 {
-                    BlockTable bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-                    if (bt == null) return;
                     foreach (ObjectId btrId in bt)
                     {
                         BlockTableRecord btr = tr.GetObject(btrId, OpenMode.ForRead) as BlockTableRecord;
                         if (btr == null) continue;
+
                         foreach (ObjectId entId in btr)
                         {
                             Entity ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
@@ -2277,19 +2279,18 @@ namespace Drill_Namer
                             {
                                 string tag1 = $"DRILL_{index1 + 1}";
                                 string tag2 = $"DRILL_{index2 + 1}";
-                                SwapDrillAttribute(blockRef, tag1, newText1, tr);
-                                SwapDrillAttribute(blockRef, tag2, newText2, tr);
+                                SwapDrillAttribute(blockRef, tag1, newText1, db, tr);
+                                SwapDrillAttribute(blockRef, tag2, newText2, db, tr);
                             }
                         }
                     }
-                    tr.Commit();
                 }
+                tr.Commit();
             }
-            SaveToJson();
 
+            SaveToJson();
             MessageBox.Show($"Swapped {oldText1} <-> {oldText2}", "Swap Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-
         private void SetAllButton_Click(object sender, EventArgs e)
         {
             var confirmResult = MessageBox.Show(
@@ -3286,18 +3287,38 @@ namespace Drill_Namer
             }
         }
 
-        private void SwapDrillAttribute(BlockReference blockRef, string tag, string newValue, Transaction tr)
+        // change the signature to take your Database as well:
+        private void SwapDrillAttribute(
+            BlockReference blockRef,
+            string tag,
+            string newValue,
+            Database db,
+            Transaction tr)
         {
             foreach (ObjectId attId in blockRef.AttributeCollection)
             {
-                AttributeReference attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
+                AttributeReference attRef = null;
+                try
+                {
+                    // normal open
+                    attRef = tr.GetObject(attId, OpenMode.ForWrite) as AttributeReference;
+                }
+                catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                    when ((ErrorStatus)ex.ErrorStatus == ErrorStatus.OnLockedLayer)
+                {
+                    // force-open on locked layer
+                    attRef = db
+                        .TransactionManager
+                        .GetObject(attId, OpenMode.ForWrite, openErased: false, forceOpenOnLockedLayer: true)
+                        as AttributeReference;
+                }
+
                 if (attRef != null && attRef.Tag.Equals(tag, StringComparison.OrdinalIgnoreCase))
                 {
                     attRef.TextString = newValue;
                 }
             }
         }
-
         private void UpdateAttributeIfTagMatches(BlockReference blockRef, string tag, string newValue, Transaction tr, ref int updatedCount)
         {
             foreach (ObjectId attId in blockRef.AttributeCollection)
@@ -4166,108 +4187,91 @@ namespace Drill_Namer
             Logger.LogInfo($"Updating attributes from '{oldValTrim}' to '{newValTrim}' (exact match, ignore case).");
 
             Document doc = AcApplication.DocumentManager.MdiActiveDocument;
-            Database db = doc.Database;
+            Database db = doc.Database;    // ← get your DB once
             int updatedCount = 0;
 
             using (DocumentLock dlock = doc.LockDocument())
+            using (Transaction tr = db.TransactionManager.StartTransaction())
             {
-                using (Transaction tr = db.TransactionManager.StartTransaction())
+                BlockTable bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                foreach (ObjectId btrId in bt)
                 {
-                    // unlock CG-NOTES layer to avoid eOnLockedLayer
-                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-                    const string targetLayer = "CG-NOTES";
-                    if (lt.Has(targetLayer))
+                    var btr = tr.GetObject(btrId, OpenMode.ForRead) as BlockTableRecord;
+                    if (btr == null || btr.IsErased) continue;
+
+                    foreach (ObjectId entId in btr)
                     {
-                        var ltr = (LayerTableRecord)tr.GetObject(lt[targetLayer], OpenMode.ForWrite);
-                        if (ltr.IsLocked) ltr.IsLocked = false;
-                    }
-                    BlockTable bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-                    if (bt == null)
-                        return;
-                    foreach (ObjectId btrId in bt)
-                    {
-                        BlockTableRecord btr = tr.GetObject(btrId, OpenMode.ForRead) as BlockTableRecord;
-                        if (btr == null || btr.IsErased)
-                            continue;
-                        foreach (ObjectId entId in btr)
+                        Entity ent;
+                        try
                         {
-                            Entity ent = null;
-                            try
+                            ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
+                        }
+                        catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                            when ((ErrorStatus)ex.ErrorStatus == ErrorStatus.OnLockedLayer)
+                        {
+                            // force‐open on locked layer
+                            ent = db.TransactionManager.GetObject(entId, OpenMode.ForWrite, false, true) as Entity;
+                        }
+                        if (ent == null || ent.IsErased) continue;
+
+                        // --- block attributes ---
+                        if (ent is BlockReference blockRef)
+                        {
+                            foreach (ObjectId attId in blockRef.AttributeCollection)
                             {
-                                ent = tr.GetObject(entId, OpenMode.ForWrite, false) as Entity;
-                            }
-                            catch (Autodesk.AutoCAD.Runtime.Exception ex)
-                            {
-                                if ((Autodesk.AutoCAD.Runtime.ErrorStatus)ex.ErrorStatus == Autodesk.AutoCAD.Runtime.ErrorStatus.WasErased)
+                                AttributeReference attRef;
+                                try
                                 {
-                                    Logger.LogWarning($"Skipped an erased entity (Handle={entId.Handle}).");
-                                    continue;
+                                    attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
                                 }
-                                throw;
-                            }
-                            if (ent == null || ent.IsErased)
-                                continue;
-                            if (ent is BlockReference blockRef)
-                            {
-                                foreach (ObjectId attId in blockRef.AttributeCollection)
+                                catch (Autodesk.AutoCAD.Runtime.Exception ex)
+                                    when ((ErrorStatus)ex.ErrorStatus == ErrorStatus.OnLockedLayer)
                                 {
-                                    AttributeReference attRef;
-                                    try
-                                    {
-                                        attRef = tr.GetObject(attId, OpenMode.ForWrite, false) as AttributeReference;
-                                    }
-                                    catch (Autodesk.AutoCAD.Runtime.Exception ex)
-                                    {
-                                        if ((Autodesk.AutoCAD.Runtime.ErrorStatus)ex.ErrorStatus == Autodesk.AutoCAD.Runtime.ErrorStatus.WasErased)
-                                        {
-                                            Logger.LogWarning("Skipping an erased attribute reference.");
-                                            continue;
-                                        }
-                                        throw;
-                                    }
-                                    if (attRef == null || attRef.IsErased)
-                                        continue;
-                                    if (attRef.TextString.Trim().Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        attRef.TextString = newValTrim;
-                                        updatedCount++;
-                                    }
+                                    attRef = db.TransactionManager.GetObject(attId, OpenMode.ForWrite, false, true)
+                                                         as AttributeReference;
                                 }
-                            }
-                            else if (ent is DBText dbText)
-                            {
-                                if (dbText.TextString.Trim().Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
+                                if (attRef == null || attRef.IsErased) continue;
+
+                                if (attRef.TextString.Trim()
+                                              .Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    dbText.TextString = newValTrim;
-                                    updatedCount++;
-                                }
-                            }
-                            else if (ent is MText mText)
-                            {
-                                if (mText.Contents.Trim().Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
-                                {
-                                    mText.Contents = newValTrim;
+                                    attRef.TextString = newValTrim;
                                     updatedCount++;
                                 }
                             }
                         }
+                        // --- plain DBText ---
+                        else if (ent is DBText dbText)
+                        {
+                            if (dbText.TextString.Trim()
+                                            .Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
+                            {
+                                dbText.TextString = newValTrim;
+                                updatedCount++;
+                            }
+                        }
+                        // --- plain MText ---
+                        else if (ent is MText mText)
+                        {
+                            if (mText.Contents.Trim()
+                                          .Equals(oldValTrim, StringComparison.OrdinalIgnoreCase))
+                            {
+                                mText.Contents = newValTrim;
+                                updatedCount++;
+                            }
+                        }
                     }
-                    tr.Commit();
                 }
+
+                tr.Commit();
             }
 
             if (updatedCount > 0)
-            {
-                Logger.LogInfo($"Successfully updated {updatedCount} occurrences of '{oldValTrim}' to '{newValTrim}'.");
                 MessageBox.Show($"Replaced '{oldValTrim}' with '{newValTrim}' in {updatedCount} place(s).",
                                 "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
             else
-            {
-                Logger.LogWarning($"No attributes found matching '{oldValTrim}'.");
                 MessageBox.Show($"No attributes found matching '{oldValTrim}' to update.",
                                 "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
         }
 
 
