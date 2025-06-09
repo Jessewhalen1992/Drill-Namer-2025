@@ -51,19 +51,20 @@ public class FindReplaceForm : Form
                     {
                         foreach (ObjectId attId in blkRef.AttributeCollection)
                         {
-                            if (tr.GetObject(attId, OpenMode.ForRead, false) is AttributeReference att)
+                            // 1️⃣  open read-only
+                            var att = (AttributeReference)tr.GetObject(attId, OpenMode.ForRead);
+                            if (!att.TextString.Equals(oldValue, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            // 2️⃣ unlock the block's layer, then write
+                            RunWithLayerUnlocked(tr, blkRef.LayerId, () =>
                             {
-                                if (att.TextString.Trim().Equals(oldValue.Trim(), StringComparison.OrdinalIgnoreCase))
-                                {
-                                    LayerState.WithUnlocked(blkRef.LayerId, () =>
-                                    {
-                                        att.UpgradeOpen();
-                                        att.TextString = newValue.Trim();
-                                        att.DowngradeOpen();
-                                    });
-                                    updated++;
-                                }
-                            }
+                                att.UpgradeOpen();              // safe: layer is writable
+                                att.TextString = newValue;
+                                att.DowngradeOpen();
+                            });
+
+                            updated++;
                         }
                     }
                 }
@@ -72,5 +73,24 @@ public class FindReplaceForm : Form
         }
 
         MessageBox.Show($"Updated {updated} attribute(s).", "Update Attributes", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private static void RunWithLayerUnlocked(Transaction tr, ObjectId layerId, Action action)
+    {
+        var layer = (LayerTableRecord)tr.GetObject(layerId, OpenMode.ForWrite);
+        bool relock = layer.IsLocked;
+        if (relock)
+        {
+            Logging.Info($"Temporarily unlocking layer '{layer.Name}'.");
+            layer.IsLocked = false;
+            Logging.Debug($"Temporarily unlocked layer '{layer.Name}'");
+        }
+
+        action();
+
+        if (relock)
+        {
+            layer.IsLocked = true;
+        }
     }
 }
