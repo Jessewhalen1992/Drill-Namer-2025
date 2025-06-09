@@ -47,19 +47,19 @@ public class FindReplaceForm : Form
                 BlockTableRecord btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
                 foreach (ObjectId entId in btr)
                 {
-                    if (tr.GetObject(entId, OpenMode.ForRead) is BlockReference br)
+                    if (tr.GetObject(entId, OpenMode.ForRead) is BlockReference blkRef)
                     {
-                        foreach (ObjectId attId in br.AttributeCollection)
+                        foreach (ObjectId attId in blkRef.AttributeCollection)
                         {
-                            if (tr.GetObject(attId, OpenMode.ForRead, false) is AttributeReference attRef)
+                            if (tr.GetObject(attId, OpenMode.ForRead, false) is AttributeReference att)
                             {
-                                if (attRef.TextString.Trim().Equals(oldValue.Trim(), StringComparison.OrdinalIgnoreCase))
+                                if (att.TextString.Trim().Equals(oldValue.Trim(), StringComparison.OrdinalIgnoreCase))
                                 {
-                                    LayerState.WithUnlocked(br.LayerId, () =>
+                                    LayerState.WithUnlocked(blkRef.LayerId, () =>
                                     {
-                                        attRef.UpgradeOpen();
-                                        attRef.TextString = newValue.Trim();
-                                        attRef.DowngradeOpen();
+                                        att.UpgradeOpen();
+                                        att.TextString = newValue.Trim();
+                                        att.DowngradeOpen();
                                     });
                                     updated++;
                                 }
