@@ -45,6 +45,7 @@ public static class LayerState
         {
             Logging.Info($"Temporarily unlocking layer '{layerTblRec.Name}'.");
             layerTblRec.IsLocked = false;
+            Logging.Debug($"Temporarily unlocked layer '{layerTblRec.Name}'");
         }
         action();
         if (relock)
