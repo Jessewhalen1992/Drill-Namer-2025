@@ -51,12 +51,16 @@ public class FindReplaceForm : Form
                     {
                         foreach (ObjectId attId in br.AttributeCollection)
                         {
-                            if (tr.GetObject(attId, OpenMode.ForWrite, false) is AttributeReference attRef)
+                            if (tr.GetObject(attId, OpenMode.ForRead, false) is AttributeReference attRef)
                             {
                                 if (attRef.TextString.Trim().Equals(oldValue.Trim(), StringComparison.OrdinalIgnoreCase))
                                 {
                                     LayerState.WithUnlocked(attRef.LayerId, () =>
                                     {
+                                        if (!attRef.IsWriteEnabled)
+                                        {
+                                            attRef.UpgradeOpen();
+                                        }
                                         attRef.TextString = newValue.Trim();
                                     });
                                     updated++;
