@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net40;net48</TargetFrameworks>
+    <DefineConstants>CAD_PLUGIN;$(DefineConstants)</DefineConstants>
+    <AssemblyName>DrillNamer</AssemblyName>
+    <RootNamespace>DrillNamer.Commands</RootNamespace>
+    <OutputPath>bin\$(Configuration)\$(TargetFramework)\</OutputPath>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)'=='net48'">
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net40'">
+    <Reference Include="acdbmgd, Version=18.0.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <Reference Include="acdbmgd, Version=24.3.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DrillNamer.Core\DrillNamer.Core.csproj" />
+    <ProjectReference Include="..\DrillNamer.UI\DrillNamer.UI.csproj" />
+  </ItemGroup>
+</Project>
