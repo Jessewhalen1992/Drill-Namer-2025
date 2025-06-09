@@ -3387,6 +3387,14 @@ namespace Drill_Namer
                 {
                     using (Transaction tr = db.TransactionManager.StartTransaction())
                     {
+                        // unlock CG-NOTES layer to avoid eOnLockedLayer
+                        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                        const string targetLayer = "CG-NOTES";
+                        if (lt.Has(targetLayer))
+                        {
+                            var ltr = (LayerTableRecord)tr.GetObject(lt[targetLayer], OpenMode.ForWrite);
+                            if (ltr.IsLocked) ltr.IsLocked = false;
+                        }
                         string newValue = newDrillName;
                         BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
                         int updatedBlocks = 0;
@@ -4165,6 +4173,14 @@ namespace Drill_Namer
             {
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
+                    // unlock CG-NOTES layer to avoid eOnLockedLayer
+                    var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                    const string targetLayer = "CG-NOTES";
+                    if (lt.Has(targetLayer))
+                    {
+                        var ltr = (LayerTableRecord)tr.GetObject(lt[targetLayer], OpenMode.ForWrite);
+                        if (ltr.IsLocked) ltr.IsLocked = false;
+                    }
                     BlockTable bt = tr.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
                     if (bt == null)
                         return;
