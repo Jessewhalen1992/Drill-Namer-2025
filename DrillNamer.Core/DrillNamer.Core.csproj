@@ -7,10 +7,26 @@
     <RootNamespace>DrillNamer.Core</RootNamespace>
     <Platforms>x64</Platforms>
 </PropertyGroup>
+
+  <!-- net40 build uses R19 (2014) DLLs -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net40'">
+    <Reference Include="acdbmgd" HintPath="external\ARX2014\acdbmgd.dll" Private="false" />
+    <Reference Include="acmgd" HintPath="external\ARX2014\acmgd.dll" Private="false" />
+    <Reference Include="accoremgd" HintPath="external\ARX2014\accoremgd.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- net48 build uses R25 (2025) DLLs -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <Reference Include="acdbmgd" HintPath="external\ARX2025\acdbmgd.dll" Private="false" />
+    <Reference Include="acmgd" HintPath="external\ARX2025\acmgd.dll" Private="false" />
+    <Reference Include="accoremgd" HintPath="external\ARX2025\accoremgd.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="EnsureArxDllsPresent" BeforeBuild">
+    <Error Condition="'$(TargetFramework)'=='net40' and !Exists('external\ARX2014\acdbmgd.dll')" Text="Missing AutoCAD ARX2014 DLLs. Copy acdbmgd.dll, acmgd.dll and accoremgd.dll to external/ARX2014." />
+    <Error Condition="'$(TargetFramework)'=='net48' and !Exists('external\ARX2025\acdbmgd.dll')" Text="Missing AutoCAD ARX2025 DLLs. Copy acdbmgd.dll, acmgd.dll and accoremgd.dll to external/ARX2025." />
+  </Target>
   <PropertyGroup Condition="'$(TargetFramework)'=='net48'">
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="4.10.0" PrivateAssets="all" />
-  </ItemGroup>
 </Project>
