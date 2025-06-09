@@ -55,13 +55,11 @@ public class FindReplaceForm : Form
                             {
                                 if (attRef.TextString.Trim().Equals(oldValue.Trim(), StringComparison.OrdinalIgnoreCase))
                                 {
-                                    LayerState.WithUnlocked(attRef.LayerId, () =>
+                                    LayerState.WithUnlocked(br.LayerId, () =>
                                     {
-                                        if (!attRef.IsWriteEnabled)
-                                        {
-                                            attRef.UpgradeOpen();
-                                        }
+                                        attRef.UpgradeOpen();
                                         attRef.TextString = newValue.Trim();
+                                        attRef.DowngradeOpen();
                                     });
                                     updated++;
                                 }
