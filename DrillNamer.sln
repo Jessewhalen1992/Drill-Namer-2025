@@ -1,0 +1,36 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillNamer.Core", "DrillNamer.Core/DrillNamer.Core.csproj", "{bb7972f0-f42a-477a-bec5-cc7429c20939}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillNamer.Commands", "DrillNamer.Commands/DrillNamer.Commands.csproj", "{86d8947e-7a24-4856-9b74-dcfd5d6a5a13}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillNamer.UI", "DrillNamer.UI/DrillNamer.UI.csproj", "{5d24b8d0-4975-4534-98f2-0dbd66b38554}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillNamer.Tests", "tests/DrillNamer.Tests/DrillNamer.Tests.csproj", "{8a9d076c-2ec4-4b7f-bb45-b8da9b3b299f}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {bb7972f0-f42a-477a-bec5-cc7429c20939}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {bb7972f0-f42a-477a-bec5-cc7429c20939}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {bb7972f0-f42a-477a-bec5-cc7429c20939}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {bb7972f0-f42a-477a-bec5-cc7429c20939}.Release|Any CPU.Build.0 = Release|Any CPU
+        {86d8947e-7a24-4856-9b74-dcfd5d6a5a13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {86d8947e-7a24-4856-9b74-dcfd5d6a5a13}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {86d8947e-7a24-4856-9b74-dcfd5d6a5a13}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {86d8947e-7a24-4856-9b74-dcfd5d6a5a13}.Release|Any CPU.Build.0 = Release|Any CPU
+        {5d24b8d0-4975-4534-98f2-0dbd66b38554}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {5d24b8d0-4975-4534-98f2-0dbd66b38554}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {5d24b8d0-4975-4534-98f2-0dbd66b38554}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {5d24b8d0-4975-4534-98f2-0dbd66b38554}.Release|Any CPU.Build.0 = Release|Any CPU
+        {8a9d076c-2ec4-4b7f-bb45-b8da9b3b299f}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {8a9d076c-2ec4-4b7f-bb45-b8da9b3b299f}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {8a9d076c-2ec4-4b7f-bb45-b8da9b3b299f}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {8a9d076c-2ec4-4b7f-bb45-b8da9b3b299f}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal
