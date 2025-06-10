@@ -28,9 +28,38 @@ using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 using AColor = Autodesk.AutoCAD.Colors.Color;
 using DrawingColor = System.Drawing.Color;
 using FormsFlowDirection = System.Windows.Forms.FlowDirection;
+using static Drill_Namer.Utils;
 
 namespace Drill_Namer
 {
+    internal static class Utils
+    {
+        /// <summary>
+        /// Show an AutoCAD alert dialog with the specified message.
+        /// </summary>
+        /// <param name="msg">Message to display.</param>
+        internal static void ShowAlert(string msg) =>
+            Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog(msg);
+
+        /// <summary>
+        /// Check if the given layer exists in the drawing database.
+        /// </summary>
+        /// <param name="db">AutoCAD database.</param>
+        /// <param name="name">Layer name.</param>
+        /// <returns>True if the layer exists.</returns>
+        internal static bool LayerExists(Database db, string name)
+        {
+            if (db == null || string.IsNullOrEmpty(name)) return false;
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+                var exists = lt.Has(name);
+                tr.Commit();
+                return exists;
+            }
+        }
+    }
+
     public static class AutoCADHelper
     {
         /// <summary>
@@ -1986,189 +2015,210 @@ namespace Drill_Namer
         {
             try
             {
-                // 1) EPPlus-8: set noncommercial license (replace the string with your org/person name)
-                OfficeOpenXml.ExcelPackage.License
-                    .SetNonCommercialOrganization("Compass Geomatics");
+                OfficeOpenXml.ExcelPackage.License.SetNonCommercialOrganization("Compass Geomatics");
 
-                // STEP 0: Extract grid labels…
-                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
-                Database db = doc.Database;
-                Editor ed = doc.Editor;
-                var gridData = new List<(string Label, double Northing, double Easting)>();
+                var csv = DrillCsvPipeline();
+                if (string.IsNullOrEmpty(csv)) return;
 
-                using (Transaction tr = db.TransactionManager.StartTransaction())
-                {
-                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-                    foreach (ObjectId id in ms)
-                    {
-                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
-                        if (ent != null && ent.Layer.Equals("Z-DRILL-POINT", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (ent is DBText dbText && IsGridLabel(dbText.TextString.Trim()))
-                                gridData.Add((dbText.TextString.Trim(), dbText.Position.Y, dbText.Position.X));
-                            else if (ent is MText mText && IsGridLabel(mText.Contents.Trim()))
-                                gridData.Add((mText.Contents.Trim(), mText.Location.Y, mText.Location.X));
-                        }
-                    }
-                    tr.Commit();
-                }
-                gridData = gridData.OrderBy(x => x.Label).ToList();
+                var excelPath = RunCordsExe(csv);
+                if (string.IsNullOrEmpty(excelPath)) return;
 
-                // STEP 1: Write CSV…
-                string cordsDir = @"C:\CORDS";
-                Directory.CreateDirectory(cordsDir);
-                string csvPath = Path.Combine(cordsDir, "cords.csv");
-                using (var sw = new StreamWriter(csvPath, false))
-                {
-                    sw.WriteLine("Label,Northing,Easting");
-                    foreach (var pt in gridData)
-                        sw.WriteLine($"{pt.Label},{pt.Northing},{pt.Easting}");
-                }
+                var tableData = ReadExcel(excelPath);
+                if (tableData == null) return;
 
-                MessageBox.Show("DONT TOUCH, WAIT FOR INSTRUCTION", "Information",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var headingValue = headingComboBox.SelectedItem?.ToString() ?? "OTHER";
+                AdjustTableForClient(tableData, headingValue);
 
-                // STEP 2: Determine parameter…
-                string headingValue = headingComboBox.SelectedItem?.ToString() ?? "OTHER";
-                string paramValue = (headingValue == "VEREN") ? "HEEL" : "ICP";
+                if (!InsertTablePipeline(tableData)) return;
 
-                // STEP 3: Launch Python EXE…
-                string processExe = @"C:\AUTOCAD-SETUP\Lisp_2000\Drill Properties\cords.exe";
-                if (File.Exists(processExe))
-                {
-                    Logger.LogInfo($"Running: {processExe} \"{csvPath}\" \"{paramValue}\"");
-                    var psi = new ProcessStartInfo(processExe, $"\"{csvPath}\" \"{paramValue}\"")
-                    {
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        StandardOutputEncoding = Encoding.GetEncoding(1252),
-                        StandardErrorEncoding = Encoding.GetEncoding(1252)
-                    };
-                    using (var proc = Process.Start(psi))
-                    {
-                        if (!proc.WaitForExit(180_000))
-                        {
-                            try { proc.Kill(); } catch { }
-                            Logger.LogError("cords.exe timeout");
-                            MessageBox.Show("cords.exe did not exit in time.", "Error",
-                                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-                        string outp = proc.StandardOutput.ReadToEnd();
-                        string errp = proc.StandardError.ReadToEnd();
-                        if (!string.IsNullOrEmpty(outp)) Logger.LogInfo(outp);
-                        if (!string.IsNullOrEmpty(errp)) Logger.LogError(errp);
-                        if (proc.ExitCode != 0)
-                        {
-                            Logger.LogError($"cords.exe code {proc.ExitCode}");
-                            MessageBox.Show($"cords.exe exited with {proc.ExitCode}", "Error",
-                                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-                    }
-                }
-                else
-                {
-                    Logger.LogWarning("cords.exe not found, skipping.");
-                }
-
-                // STEP 4: Confirm Excel exists…
-                string excelFilePath = Path.Combine(cordsDir, "ExportedCoordsFormatted.xlsx");
-                if (!File.Exists(excelFilePath))
-                {
-                    MessageBox.Show("ExportedCoordsFormatted.xlsx not found.", "Error",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                // STEP 5: Read/process Excel…
-                string[,] tableData;
-                using (var package = new OfficeOpenXml.ExcelPackage(new FileInfo(excelFilePath)))
-                {
-                    var ws = package.Workbook.Worksheets[0];
-                    if (ws.Dimension == null)
-                    {
-                        MessageBox.Show("The Excel file is empty.", "Error",
-                                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-                    int sr = ws.Dimension.Start.Row, sc = ws.Dimension.Start.Column;
-                    int er = ws.Dimension.End.Row, ec = ws.Dimension.End.Column;
-
-                    // trim trailing blanks
-                    int lastRow = er;
-                    for (int r = er; r >= sr; r--)
-                    {
-                        bool blank = true;
-                        for (int c = sc; c <= ec; c++)
-                            if (!string.IsNullOrWhiteSpace(ws.Cells[r, c].Text))
-                            {
-                                blank = false;
-                                break;
-                            }
-                        if (!blank) { lastRow = r; break; }
-                    }
-
-                    int rows = lastRow - sr + 1, cols = ec - sc + 1;
-                    tableData = new string[rows, cols];
-                    for (int r = 0; r < rows; r++)
-                        for (int c = 0; c < cols; c++)
-                            tableData[r, c] = ws.Cells[r + sr, c + sc].Text;
-                }
-
-                // STEP 6: Swap ICP/HEEL if needed…
-                if (headingValue == "VEREN")
-                {
-                    for (int r = 0; r < tableData.GetLength(0); r++)
-                        for (int c = 0; c < tableData.GetLength(1); c++)
-                            if (!string.IsNullOrEmpty(tableData[r, c]) && tableData[r, c].Contains("ICP"))
-                                tableData[r, c] = tableData[r, c].Replace("ICP", "HEEL");
-                }
-                else if (headingValue == "OTHER")
-                {
-                    for (int r = 0; r < tableData.GetLength(0); r++)
-                        for (int c = 0; c < tableData.GetLength(1); c++)
-                            if (!string.IsNullOrEmpty(tableData[r, c]) && tableData[r, c].Contains("HEEL"))
-                                tableData[r, c] = tableData[r, c].Replace("HEEL", "ICP");
-                }
-
-                // STEP 7: Get insertion point…
-                MessageBox.Show("BACK TO CAD, PICK A POINT", "Info",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ed = AcApplication.DocumentManager.MdiActiveDocument.Editor;
-                var ppr = ed.GetPoint("\nSelect insertion point:");
-                if (ppr.Status != PromptStatus.OK)
-                {
-                    ed.WriteMessage("\nCancelled.");
-                    return;
-                }
-                Point3d insertionPt = ppr.Value;
-
-                // STEP 8: Insert table
-                using (var docLock = doc.LockDocument())
-                {
-                    // 2) use doc.Database — not docLock.Document
-                    db = doc.Database;
-                    EnsureLayer(db, "CG-NOTES");
-                    InsertAndFormatTable(insertionPt, tableData, "induction Bend");
-                }
-
-                MessageBox.Show("Coordinate table created!", "Success",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowAlert("Coordinate table created!");
                 Logger.LogInfo("COMPLETE CORDS succeeded.");
-
-                // STEP 9: Add headings
                 HeadingAllButton_Click(null, EventArgs.Empty);
             }
-            catch (System.Exception ex)  // 3) fully qualify to avoid ambiguity
+            catch (System.Exception ex)
             {
                 Logger.LogError($"Error in COMPLETE CORDS: {ex.Message}\n{ex.StackTrace}");
-                MessageBox.Show($"Error in COMPLETE CORDS: {ex.Message}", "Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowAlert($"Error in COMPLETE CORDS: {ex.Message}");
             }
+        }
+
+        private string DrillCsvPipeline()
+        {
+            var doc = AcApplication.DocumentManager.MdiActiveDocument;
+            var db = doc.Database;
+
+            if (!LayerExists(db, "Z-DRILL-POINT"))
+            {
+                ShowAlert("Layer 'Z-DRILL-POINT' not found.");
+                return null;
+            }
+
+            var gridData = new List<(string Label, double Northing, double Easting)>();
+            using (var tr = db.TransactionManager.StartTransaction())
+            {
+                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in ms)
+                {
+                    if (tr.GetObject(id, OpenMode.ForRead) is Entity ent &&
+                        ent.Layer.Equals("Z-DRILL-POINT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (ent is DBText dbText && IsGridLabel(dbText.TextString.Trim()))
+                            gridData.Add((dbText.TextString.Trim(), dbText.Position.Y, dbText.Position.X));
+                        else if (ent is MText mText && IsGridLabel(mText.Contents.Trim()))
+                            gridData.Add((mText.Contents.Trim(), mText.Location.Y, mText.Location.X));
+                    }
+                }
+                tr.Commit();
+            }
+
+            gridData = gridData.OrderBy(x => x.Label).ToList();
+
+            var cordsDir = @"C:\CORDS";
+            Directory.CreateDirectory(cordsDir);
+            var csvPath = Path.Combine(cordsDir, "cords.csv");
+            using (var sw = new StreamWriter(csvPath, false))
+            {
+                sw.WriteLine("Label,Northing,Easting");
+                foreach (var pt in gridData)
+                    sw.WriteLine($"{pt.Label},{pt.Northing},{pt.Easting}");
+            }
+
+            ShowAlert("DONT TOUCH, WAIT FOR INSTRUCTION");
+            return csvPath;
+        }
+
+        private string RunCordsExe(string csvPath)
+        {
+            var headingValue = headingComboBox.SelectedItem?.ToString() ?? "OTHER";
+            var paramValue = headingValue == "VEREN" ? "HEEL" : "ICP";
+
+            var processExe = @"C:\AUTOCAD-SETUP\Lisp_2000\Drill Properties\cords.exe";
+            if (File.Exists(processExe))
+            {
+                Logger.LogInfo($"Running: {processExe} \"{csvPath}\" \"{paramValue}\"");
+                var psi = new ProcessStartInfo(processExe, $"\"{csvPath}\" \"{paramValue}\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.GetEncoding(1252),
+                    StandardErrorEncoding = Encoding.GetEncoding(1252)
+                };
+                using (var proc = Process.Start(psi))
+                {
+                    if (!proc.WaitForExit(180_000))
+                    {
+                        try { proc.Kill(); } catch { }
+                        Logger.LogError("cords.exe timeout");
+                        ShowAlert("cords.exe did not exit in time.");
+                        return null;
+                    }
+                    var outp = proc.StandardOutput.ReadToEnd();
+                    var errp = proc.StandardError.ReadToEnd();
+                    if (!string.IsNullOrEmpty(outp)) Logger.LogInfo(outp);
+                    if (!string.IsNullOrEmpty(errp)) Logger.LogError(errp);
+                    if (proc.ExitCode != 0)
+                    {
+                        Logger.LogError($"cords.exe code {proc.ExitCode}");
+                        ShowAlert($"cords.exe exited with {proc.ExitCode}");
+                        return null;
+                    }
+                }
+            }
+            else
+            {
+                Logger.LogWarning("cords.exe not found, skipping.");
+            }
+
+            var excelFilePath = Path.Combine(Path.GetDirectoryName(csvPath), "ExportedCoordsFormatted.xlsx");
+            if (!File.Exists(excelFilePath))
+            {
+                ShowAlert("ExportedCoordsFormatted.xlsx not found.");
+                return null;
+            }
+
+            return excelFilePath;
+        }
+
+        private string[,] ReadExcel(string excelFilePath)
+        {
+            using (var package = new OfficeOpenXml.ExcelPackage(new FileInfo(excelFilePath)))
+            {
+                var ws = package.Workbook.Worksheets[0];
+                if (ws.Dimension == null)
+                {
+                    ShowAlert("The Excel file is empty.");
+                    return null;
+                }
+
+                int sr = ws.Dimension.Start.Row, sc = ws.Dimension.Start.Column;
+                int er = ws.Dimension.End.Row, ec = ws.Dimension.End.Column;
+
+                int lastRow = er;
+                for (int r = er; r >= sr; r--)
+                {
+                    var blank = true;
+                    for (int c = sc; c <= ec; c++)
+                        if (!string.IsNullOrWhiteSpace(ws.Cells[r, c].Text))
+                        {
+                            blank = false;
+                            break;
+                        }
+                    if (!blank) { lastRow = r; break; }
+                }
+
+                int rows = lastRow - sr + 1, cols = ec - sc + 1;
+                var tableData = new string[rows, cols];
+                for (int r = 0; r < rows; r++)
+                    for (int c = 0; c < cols; c++)
+                        tableData[r, c] = ws.Cells[r + sr, c + sc].Text;
+
+                return tableData;
+            }
+        }
+
+        private void AdjustTableForClient(string[,] tableData, string headingValue)
+        {
+            if (headingValue == "VEREN")
+            {
+                for (int r = 0; r < tableData.GetLength(0); r++)
+                    for (int c = 0; c < tableData.GetLength(1); c++)
+                        if (!string.IsNullOrEmpty(tableData[r, c]) && tableData[r, c].Contains("ICP"))
+                            tableData[r, c] = tableData[r, c].Replace("ICP", "HEEL");
+            }
+            else if (headingValue == "OTHER")
+            {
+                for (int r = 0; r < tableData.GetLength(0); r++)
+                    for (int c = 0; c < tableData.GetLength(1); c++)
+                        if (!string.IsNullOrEmpty(tableData[r, c]) && tableData[r, c].Contains("HEEL"))
+                            tableData[r, c] = tableData[r, c].Replace("HEEL", "ICP");
+            }
+        }
+
+        private bool InsertTablePipeline(string[,] tableData)
+        {
+            var doc = AcApplication.DocumentManager.MdiActiveDocument;
+            var ed = doc.Editor;
+
+            ShowAlert("BACK TO CAD, PICK A POINT");
+            var ppr = ed.GetPoint("\nSelect insertion point:");
+            if (ppr.Status != PromptStatus.OK)
+            {
+                ed.WriteMessage("\nCancelled.");
+                return false;
+            }
+            var insertionPt = ppr.Value;
+
+            using (var docLock = doc.LockDocument())
+            {
+                var db = doc.Database;
+                EnsureLayer(db, "CG-NOTES");
+                InsertAndFormatTable(insertionPt, tableData, "induction Bend");
+            }
+
+            return true;
         }
         /// <summary>
         /// Helper method to determine if a text string is a grid label in the range A1–L12.
