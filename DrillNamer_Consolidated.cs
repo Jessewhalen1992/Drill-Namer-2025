@@ -3882,7 +3882,9 @@ namespace Drill_Namer
                 }
                 Database db = doc.Database;
 
-                var textEntities = GetEntitiesOnLayer(db, "Z-DRILL-POINT",
+                /* ---------------- 1)  Collect drill-grid labels ---------------- */
+                var textEntities = GetEntitiesOnLayer(
+                    db, "Z-DRILL-POINT",
                     RXObject.GetClass(typeof(DBText)),
                     RXObject.GetClass(typeof(MText))).ToList();
 
@@ -3902,7 +3904,9 @@ namespace Drill_Namer
                     return;
                 }
 
-                var curveEntities = GetEntitiesOnLayer(db, "L-SEC-HB",
+                /* ---------------- 2)  Collect L-SEC-HB curves ------------------ */
+                var curveEntities = GetEntitiesOnLayer(
+                    db, "L-SEC-HB",
                     RXObject.GetClass(typeof(Line)),
                     RXObject.GetClass(typeof(Polyline)),
                     RXObject.GetClass(typeof(Polyline2d)),
@@ -3917,6 +3921,7 @@ namespace Drill_Namer
 
                 var noOffsetLabels = new List<string>();
 
+                /* ---------------- 3)  Build offsets ---------------------------- */
                 using (DocumentLock docLock = doc.LockDocument())
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
@@ -3926,91 +3931,72 @@ namespace Drill_Namer
 
                     foreach (var (label, pt) in gridPoints)
                     {
-                        Curve nsCurve = null;
-                        Curve ewCurve = null;
-                        Point3d nsClosest = Point3d.Origin;
-                        Point3d ewClosest = Point3d.Origin;
-                        double nsDx = double.MaxValue;
-                        double ewDy = double.MaxValue;
+                        Curve nsCurve = null, ewCurve = null;
+                        Point3d nsClosest = Point3d.Origin, ewClosest = Point3d.Origin;
+                        double nsDx = double.MaxValue, ewDy = double.MaxValue;
 
+                        /*  ── find nearest NS & EW curve within 830 m ── */
                         foreach (var cv in curves)
                         {
                             Point3d cp = cv.GetClosestPointTo(pt, false);
                             double dist = pt.DistanceTo(cp);
-                            if (dist > 830.0)
-                                continue;
+                            if (dist > 830.0) continue;
 
                             double dx = Math.Abs(pt.X - cp.X);
                             double dy = Math.Abs(pt.Y - cp.Y);
 
-                            if (dx < nsDx)
+                            if (dx < nsDx) { nsDx = dx; nsCurve = cv; nsClosest = cp; }
+                            if (dy < ewDy) { ewDy = dy; ewCurve = cv; ewClosest = cp; }
+                        }
+
+                        /*  helper to draw line + MTEXT  */
+                        void DrawOffset(Curve curve, Point3d cp)
+                        {
+                            double dist = pt.DistanceTo(cp);
+
+                            // line
+                            var ln = new Line(pt, cp) { Layer = "P-Drill-Offset" };
+                            ms.AppendEntity(ln);
+                            tr.AddNewlyCreatedDBObject(ln, true);
+
+                            // mid-point text (no angle-brackets)
+                            Point3d mid = new Point3d((pt.X + cp.X) / 2.0,
+                                                      (pt.Y + cp.Y) / 2.0,
+                                                      (pt.Z + cp.Z) / 2.0);
+                            var mt = new MText
                             {
-                                nsDx = dx;
-                                nsCurve = cv;
-                                nsClosest = cp;
-                            }
-                            if (dy < ewDy)
-                            {
-                                ewDy = dy;
-                                ewCurve = cv;
-                                ewClosest = cp;
-                            }
+                                Location = mid,
+                                TextHeight = 2.5,
+                                Contents = $"{{\\C1;{dist:F1}}}",   // ‹ brackets removed ›
+                                Layer = "P-Drill-Offset"
+                            };
+                            ms.AppendEntity(mt);
+                            tr.AddNewlyCreatedDBObject(mt, true);
+
+                            // optional: fire DIMPERP LISP
+                            AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
+                                $"DIMPERP ", true, false, false);
                         }
 
                         bool found = false;
-                        if (nsCurve != null)
-                        {
-                            double dist = pt.DistanceTo(nsClosest);
-                            Line ln = new Line(pt, nsClosest) { Layer = "P-Drill-Offset" };
-                            ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
-                            Point3d mid = new Point3d((pt.X + nsClosest.X) / 2.0, (pt.Y + nsClosest.Y) / 2.0, (pt.Z + nsClosest.Z) / 2.0);
-                            MText mt = new MText
-                            {
-                                Location = mid,
-                                TextHeight = 2.5,
-                                Contents = $"{{\\C1;<{dist:F1}>}}",
-                                Layer = "P-Drill-Offset"
-                            };
-                            ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
-                            AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
-                                $"(command \"_.DIMPERP\" \"{pt.X},{pt.Y}\" \"\") ", true, false, false);
-                            found = true;
-                        }
+                        if (nsCurve != null) { DrawOffset(nsCurve, nsClosest); found = true; }
+                        if (ewCurve != null) { DrawOffset(ewCurve, ewClosest); found = true; }
 
-                        if (ewCurve != null)
-                        {
-                            double dist = pt.DistanceTo(ewClosest);
-                            Line ln = new Line(pt, ewClosest) { Layer = "P-Drill-Offset" };
-                            ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
-                            Point3d mid = new Point3d((pt.X + ewClosest.X) / 2.0, (pt.Y + ewClosest.Y) / 2.0, (pt.Z + ewClosest.Z) / 2.0);
-                            MText mt = new MText
-                            {
-                                Location = mid,
-                                TextHeight = 2.5,
-                                Contents = $"{{\\C1;<{dist:F1}>}}",
-                                Layer = "P-Drill-Offset"
-                            };
-                            ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
-                            AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
-                                $"(command \"_.DIMPERP\" \"{pt.X},{pt.Y}\" \"\") ", true, false, false);
-                            found = true;
-                        }
-
-                        if (!found)
-                            noOffsetLabels.Add(label);
+                        if (!found) noOffsetLabels.Add(label);
                     }
 
                     tr.Commit();
                 }
 
+                /* ---------------- 4)  Final user message ------------------------ */
                 if (noOffsetLabels.Count > 0)
                     ShowAlert($"No L-SEC-HB within 830 m for: {string.Join(", ", noOffsetLabels)}");
                 else
                     ShowAlert("Add Offsets complete.");
             }
-            catch (System.Exception ex)
+            catch (System.Exception ex)  // fully-qualified to avoid ambiguity
             {
-                Logger.LogError($"Error in AddOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
+                Logger.LogError($"AddOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 ShowAlert($"Error: {ex.Message}");
             }
         }
