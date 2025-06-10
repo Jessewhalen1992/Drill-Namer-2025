@@ -1036,6 +1036,18 @@ namespace Drill_Namer
             addDrillPtsButton.Click += AddDrillPtsButton_Click;
             row4.Controls.Add(addDrillPtsButton);
 
+            Button addOffsetsButton = new Button()
+            {
+                Text = "ADD OFFSETS",
+                Size = new System.Drawing.Size(120, 30),
+                Font = buttonFont,
+                BackColor = System.Drawing.Color.LightBlue,
+                ForeColor = System.Drawing.Color.Black,
+                FlatStyle = FlatStyle.Flat
+            };
+            addOffsetsButton.Click += AddOffsetsButton_Click;
+            row4.Controls.Add(addOffsetsButton);
+
             bottomPanel.Controls.Add(row4);
 
             // ROW 5: NEW: UPDATE OFFSETS
@@ -3211,6 +3223,52 @@ namespace Drill_Namer
             }
         }
 
+        /// <summary>
+        /// Retrieve entities of specific types on a given layer from model space.
+        /// </summary>
+        /// <param name="db">AutoCAD database.</param>
+        /// <param name="layer">Layer name.</param>
+        /// <param name="types">Allowed entity RX classes.</param>
+        /// <returns>Enumerable of cloned entities.</returns>
+        private static IEnumerable<Entity> GetEntitiesOnLayer(Database db, string layer, params RXClass[] types)
+        {
+            var results = new List<Entity>();
+            if (db == null || string.IsNullOrEmpty(layer))
+                return results;
+
+            using (Transaction tr = db.TransactionManager.StartTransaction())
+            {
+                BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                foreach (ObjectId id in ms)
+                {
+                    Entity ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                    if (ent == null) continue;
+                    if (!ent.Layer.Equals(layer, StringComparison.OrdinalIgnoreCase)) continue;
+
+                    if (types != null && types.Length > 0)
+                    {
+                        bool match = false;
+                        var rx = ent.GetRXClass();
+                        foreach (var cls in types)
+                        {
+                            if (rx.IsDerivedFrom(cls))
+                            {
+                                match = true;
+                                break;
+                            }
+                        }
+                        if (!match) continue;
+                    }
+
+                    results.Add(ent.Clone() as Entity);
+                }
+                tr.Commit();
+            }
+
+            return results;
+        }
+
         private ObjectId GetTableStyleId(Database db, string styleName, Transaction tr)
         {
             DBDictionary tableStyleDict = (DBDictionary)tr.GetObject(db.TableStyleDictionaryId, OpenMode.ForRead);
@@ -3809,6 +3867,151 @@ namespace Drill_Namer
             {
                 Logger.LogError($"Error in AddDrillPtsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"Error: {ex.Message}", "Add Drill Pts", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void AddOffsetsButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                Document doc = AcApplication.DocumentManager.MdiActiveDocument;
+                if (doc == null)
+                {
+                    ShowAlert("No active AutoCAD document.");
+                    return;
+                }
+                Database db = doc.Database;
+
+                var textEntities = GetEntitiesOnLayer(db, "Z-DRILL-POINT",
+                    RXObject.GetClass(typeof(DBText)),
+                    RXObject.GetClass(typeof(MText))).ToList();
+
+                Regex gridRegex = new Regex("^[A-Z][1-9][0-9]{0,2}$");
+                var gridPoints = new List<(string Label, Point3d Pt)>();
+                foreach (var ent in textEntities)
+                {
+                    if (ent is DBText dbt && gridRegex.IsMatch(dbt.TextString.Trim()))
+                        gridPoints.Add((dbt.TextString.Trim(), dbt.Position));
+                    else if (ent is MText mt && gridRegex.IsMatch(mt.Contents.Trim()))
+                        gridPoints.Add((mt.Contents.Trim(), mt.Location));
+                }
+
+                if (gridPoints.Count == 0)
+                {
+                    ShowAlert("No Z-DRILL-POINT labels found.");
+                    return;
+                }
+
+                var curveEntities = GetEntitiesOnLayer(db, "L-SEC-HB",
+                    RXObject.GetClass(typeof(Line)),
+                    RXObject.GetClass(typeof(Polyline)),
+                    RXObject.GetClass(typeof(Polyline2d)),
+                    RXObject.GetClass(typeof(Polyline3d))).ToList();
+
+                var curves = curveEntities.OfType<Curve>().ToList();
+                if (curves.Count == 0)
+                {
+                    ShowAlert("No L-SEC-HB polylines/lines found.");
+                    return;
+                }
+
+                var noOffsetLabels = new List<string>();
+
+                using (DocumentLock docLock = doc.LockDocument())
+                using (Transaction tr = db.TransactionManager.StartTransaction())
+                {
+                    EnsureLayer(db, "P-Drill-Offset");
+                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+                    foreach (var (label, pt) in gridPoints)
+                    {
+                        Curve nsCurve = null;
+                        Curve ewCurve = null;
+                        Point3d nsClosest = Point3d.Origin;
+                        Point3d ewClosest = Point3d.Origin;
+                        double nsDx = double.MaxValue;
+                        double ewDy = double.MaxValue;
+
+                        foreach (var cv in curves)
+                        {
+                            Point3d cp = cv.GetClosestPointTo(pt, false);
+                            double dist = pt.DistanceTo(cp);
+                            if (dist > 830.0)
+                                continue;
+
+                            double dx = Math.Abs(pt.X - cp.X);
+                            double dy = Math.Abs(pt.Y - cp.Y);
+
+                            if (dx < nsDx)
+                            {
+                                nsDx = dx;
+                                nsCurve = cv;
+                                nsClosest = cp;
+                            }
+                            if (dy < ewDy)
+                            {
+                                ewDy = dy;
+                                ewCurve = cv;
+                                ewClosest = cp;
+                            }
+                        }
+
+                        bool found = false;
+                        if (nsCurve != null)
+                        {
+                            double dist = pt.DistanceTo(nsClosest);
+                            Line ln = new Line(pt, nsClosest) { Layer = "P-Drill-Offset" };
+                            ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
+                            Point3d mid = new Point3d((pt.X + nsClosest.X) / 2.0, (pt.Y + nsClosest.Y) / 2.0, (pt.Z + nsClosest.Z) / 2.0);
+                            MText mt = new MText
+                            {
+                                Location = mid,
+                                TextHeight = 2.5,
+                                Contents = $"{{\\C1;<{dist:F1}>}}",
+                                Layer = "P-Drill-Offset"
+                            };
+                            ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
+                            AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
+                                $"(command \"_.DIMPERP\" \"{pt.X},{pt.Y}\" \"\") ", true, false, false);
+                            found = true;
+                        }
+
+                        if (ewCurve != null)
+                        {
+                            double dist = pt.DistanceTo(ewClosest);
+                            Line ln = new Line(pt, ewClosest) { Layer = "P-Drill-Offset" };
+                            ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
+                            Point3d mid = new Point3d((pt.X + ewClosest.X) / 2.0, (pt.Y + ewClosest.Y) / 2.0, (pt.Z + ewClosest.Z) / 2.0);
+                            MText mt = new MText
+                            {
+                                Location = mid,
+                                TextHeight = 2.5,
+                                Contents = $"{{\\C1;<{dist:F1}>}}",
+                                Layer = "P-Drill-Offset"
+                            };
+                            ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
+                            AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
+                                $"(command \"_.DIMPERP\" \"{pt.X},{pt.Y}\" \"\") ", true, false, false);
+                            found = true;
+                        }
+
+                        if (!found)
+                            noOffsetLabels.Add(label);
+                    }
+
+                    tr.Commit();
+                }
+
+                if (noOffsetLabels.Count > 0)
+                    ShowAlert($"No L-SEC-HB within 830 m for: {string.Join(", ", noOffsetLabels)}");
+                else
+                    ShowAlert("Add Offsets complete.");
+            }
+            catch (System.Exception ex)
+            {
+                Logger.LogError($"Error in AddOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
+                ShowAlert($"Error: {ex.Message}");
             }
         }
         private void UpdateOffsetsButton_Click(object sender, EventArgs e)
