@@ -3886,8 +3886,7 @@ namespace Drill_Namer
 
                 Regex gridRx = new Regex("^[A-Z][1-9][0-9]{0,2}$");
                 var gridPts = new List<(string Label, Point3d Pt)>();
-
-                foreach (var ent in textEnts)          // ← renamed from e → ent
+                foreach (var ent in textEnts)
                 {
                     if (ent is DBText t && gridRx.IsMatch(t.TextString.Trim()))
                         gridPts.Add((t.TextString.Trim(), t.Position));
@@ -3907,15 +3906,63 @@ namespace Drill_Namer
                 var curves = curveEnts.OfType<Curve>().ToList();
                 if (curves.Count == 0) { ShowAlert("No L-SEC-HB polylines/lines found."); return; }
 
-                /* 3 ── process each point ────────────────────────────────────── */
-                var warnList = new List<string>();   // individual warnings
+                /* 3 ── process each grid point ───────────────────────────────── */
+                var warnList = new List<string>();         // list of points without one or both offsets
+                Tolerance tol = new Tolerance(1e-3, 1e-3); // 1 mm geometric tolerance
 
                 using (DocumentLock _ = doc.LockDocument())
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
                     EnsureLayer(db, "P-Drill-Offset");
-                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+
+                    /* local helper: does a P-Drill-Offset line between these points already exist? */
+                    bool OffsetLineExists(Point3d p1, Point3d p2)
+                    {
+                        foreach (ObjectId id in ms)
+                        {
+                            if (tr.GetObject(id, OpenMode.ForRead) is Line ln &&
+                                ln.Layer.Equals("P-Drill-Offset", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if ((ln.StartPoint.IsEqualTo(p1, tol) && ln.EndPoint.IsEqualTo(p2, tol)) ||
+                                    (ln.StartPoint.IsEqualTo(p2, tol) && ln.EndPoint.IsEqualTo(p1, tol)))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    }
+
+                    /* local helper: draw line + MTEXT (skip if duplicate) */
+                    void DrawOffset(Point3d from, Point3d to, string dirLabel)
+                    {
+                        if (OffsetLineExists(from, to)) return;   // duplicate detected
+
+                        double dist = from.DistanceTo(to);
+
+                        var ln = new Line(from, to) { Layer = "P-Drill-Offset" };
+                        ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
+
+                        Point3d mid = new Point3d((from.X + to.X) / 2.0,
+                                                  (from.Y + to.Y) / 2.0,
+                                                  (from.Z + to.Z) / 2.0);
+
+                        var mt = new MText
+                        {
+                            Location = mid,
+                            TextHeight = 2.5,
+                            Contents = $"{{\\C1;{dist:F1}}}",   // red text, no angle brackets
+                            Layer = "P-Drill-Offset"
+                        };
+                        ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
+
+                        // Optionally call the user’s DIMPERP LISP (best-effort)
+                        AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
+                            "DIMPERP ", true, false, false);
+                    }
 
                     foreach (var (label, pt) in gridPts)
                     {
@@ -3923,6 +3970,7 @@ namespace Drill_Namer
                         Point3d nsCp = Point3d.Origin, ewCp = Point3d.Origin;
                         double nsDx = double.MaxValue, ewDy = double.MaxValue;
 
+                        // pick nearest NS & EW curves within 830 m
                         foreach (var cv in curves)
                         {
                             Point3d cp = cv.GetClosestPointTo(pt, false);
@@ -3936,27 +3984,9 @@ namespace Drill_Namer
                             if (dy < ewDy) { ewDy = dy; ewCv = cv; ewCp = cp; }
                         }
 
-                        // helper to draw one offset
-                        void DrawOffset(Point3d cp, bool isNs)
-                        {
-                            double dist = pt.DistanceTo(cp);
-                            var ln = new Line(pt, cp) { Layer = "P-Drill-Offset" };
-                            ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
-
-                            Point3d mid = new Point3d((pt.X + cp.X) / 2, (pt.Y + cp.Y) / 2, 0);
-                            var mt = new MText
-                            {
-                                Location = mid,
-                                TextHeight = 2.5,
-                                Contents = $"{{\\C1;{dist:F1}}}",
-                                Layer = "P-Drill-Offset"
-                            };
-                            ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
-                        }
-
                         bool nsMade = false, ewMade = false;
-                        if (nsCv != null) { DrawOffset(nsCp, true); nsMade = true; }
-                        if (ewCv != null) { DrawOffset(ewCp, false); ewMade = true; }
+                        if (nsCv != null) { DrawOffset(pt, nsCp, "N-S"); nsMade = true; }
+                        if (ewCv != null) { DrawOffset(pt, ewCp, "E-W"); ewMade = true; }
 
                         if (!nsMade) warnList.Add($"{label} (N-S)");
                         if (!ewMade) warnList.Add($"{label} (E-W)");
@@ -3964,13 +3994,14 @@ namespace Drill_Namer
                     tr.Commit();
                 }
 
-                /* 4 ── final message ─────────────────────────────────────────── */
+                /* 4 ── final user message ────────────────────────────────────── */
                 if (warnList.Count > 0)
-                    ShowAlert("Unable to find L-SEC-HB for:\n  • " + string.Join("\n  • ", warnList));
+                    ShowAlert("Unable to find L-SEC-HB for:\n  • " +
+                              string.Join("\n  • ", warnList));
                 else
                     ShowAlert("Add Offsets complete.");
             }
-            catch (System.Exception ex)
+            catch (System.Exception ex)     // qualify to avoid ambiguity
             {
                 Logger.LogError($"AddOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 ShowAlert($"Error: {ex.Message}");
