@@ -3875,67 +3875,54 @@ namespace Drill_Namer
             try
             {
                 Document doc = AcApplication.DocumentManager.MdiActiveDocument;
-                if (doc == null)
-                {
-                    ShowAlert("No active AutoCAD document.");
-                    return;
-                }
+                if (doc == null) { ShowAlert("No active AutoCAD document."); return; }
                 Database db = doc.Database;
 
-                /* ---------------- 1)  Collect drill-grid labels ---------------- */
-                var textEntities = GetEntitiesOnLayer(
+                /* 1 ── gather Z-DRILL-POINT labels ───────────────────────────── */
+                var textEnts = GetEntitiesOnLayer(
                     db, "Z-DRILL-POINT",
                     RXObject.GetClass(typeof(DBText)),
                     RXObject.GetClass(typeof(MText))).ToList();
 
-                Regex gridRegex = new Regex("^[A-Z][1-9][0-9]{0,2}$");
-                var gridPoints = new List<(string Label, Point3d Pt)>();
-                foreach (var ent in textEntities)
-                {
-                    if (ent is DBText dbt && gridRegex.IsMatch(dbt.TextString.Trim()))
-                        gridPoints.Add((dbt.TextString.Trim(), dbt.Position));
-                    else if (ent is MText mt && gridRegex.IsMatch(mt.Contents.Trim()))
-                        gridPoints.Add((mt.Contents.Trim(), mt.Location));
-                }
+                Regex gridRx = new Regex("^[A-Z][1-9][0-9]{0,2}$");
+                var gridPts = new List<(string Label, Point3d Pt)>();
 
-                if (gridPoints.Count == 0)
+                foreach (var ent in textEnts)          // ← renamed from e → ent
                 {
-                    ShowAlert("No Z-DRILL-POINT labels found.");
-                    return;
+                    if (ent is DBText t && gridRx.IsMatch(t.TextString.Trim()))
+                        gridPts.Add((t.TextString.Trim(), t.Position));
+                    else if (ent is MText m && gridRx.IsMatch(m.Contents.Trim()))
+                        gridPts.Add((m.Contents.Trim(), m.Location));
                 }
+                if (gridPts.Count == 0) { ShowAlert("No Z-DRILL-POINT labels found."); return; }
 
-                /* ---------------- 2)  Collect L-SEC-HB curves ------------------ */
-                var curveEntities = GetEntitiesOnLayer(
+                /* 2 ── gather L-SEC-HB curves ────────────────────────────────── */
+                var curveEnts = GetEntitiesOnLayer(
                     db, "L-SEC-HB",
                     RXObject.GetClass(typeof(Line)),
                     RXObject.GetClass(typeof(Polyline)),
                     RXObject.GetClass(typeof(Polyline2d)),
                     RXObject.GetClass(typeof(Polyline3d))).ToList();
 
-                var curves = curveEntities.OfType<Curve>().ToList();
-                if (curves.Count == 0)
-                {
-                    ShowAlert("No L-SEC-HB polylines/lines found.");
-                    return;
-                }
+                var curves = curveEnts.OfType<Curve>().ToList();
+                if (curves.Count == 0) { ShowAlert("No L-SEC-HB polylines/lines found."); return; }
 
-                var noOffsetLabels = new List<string>();
+                /* 3 ── process each point ────────────────────────────────────── */
+                var warnList = new List<string>();   // individual warnings
 
-                /* ---------------- 3)  Build offsets ---------------------------- */
-                using (DocumentLock docLock = doc.LockDocument())
+                using (DocumentLock _ = doc.LockDocument())
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
                     EnsureLayer(db, "P-Drill-Offset");
-                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-                    foreach (var (label, pt) in gridPoints)
+                    foreach (var (label, pt) in gridPts)
                     {
-                        Curve nsCurve = null, ewCurve = null;
-                        Point3d nsClosest = Point3d.Origin, ewClosest = Point3d.Origin;
+                        Curve nsCv = null, ewCv = null;
+                        Point3d nsCp = Point3d.Origin, ewCp = Point3d.Origin;
                         double nsDx = double.MaxValue, ewDy = double.MaxValue;
 
-                        /*  ── find nearest NS & EW curve within 830 m ── */
                         foreach (var cv in curves)
                         {
                             Point3d cp = cv.GetClosestPointTo(pt, false);
@@ -3945,56 +3932,45 @@ namespace Drill_Namer
                             double dx = Math.Abs(pt.X - cp.X);
                             double dy = Math.Abs(pt.Y - cp.Y);
 
-                            if (dx < nsDx) { nsDx = dx; nsCurve = cv; nsClosest = cp; }
-                            if (dy < ewDy) { ewDy = dy; ewCurve = cv; ewClosest = cp; }
+                            if (dx < nsDx) { nsDx = dx; nsCv = cv; nsCp = cp; }
+                            if (dy < ewDy) { ewDy = dy; ewCv = cv; ewCp = cp; }
                         }
 
-                        /*  helper to draw line + MTEXT  */
-                        void DrawOffset(Curve curve, Point3d cp)
+                        // helper to draw one offset
+                        void DrawOffset(Point3d cp, bool isNs)
                         {
                             double dist = pt.DistanceTo(cp);
-
-                            // line
                             var ln = new Line(pt, cp) { Layer = "P-Drill-Offset" };
-                            ms.AppendEntity(ln);
-                            tr.AddNewlyCreatedDBObject(ln, true);
+                            ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
 
-                            // mid-point text (no angle-brackets)
-                            Point3d mid = new Point3d((pt.X + cp.X) / 2.0,
-                                                      (pt.Y + cp.Y) / 2.0,
-                                                      (pt.Z + cp.Z) / 2.0);
+                            Point3d mid = new Point3d((pt.X + cp.X) / 2, (pt.Y + cp.Y) / 2, 0);
                             var mt = new MText
                             {
                                 Location = mid,
                                 TextHeight = 2.5,
-                                Contents = $"{{\\C1;{dist:F1}}}",   // ‹ brackets removed ›
+                                Contents = $"{{\\C1;{dist:F1}}}",
                                 Layer = "P-Drill-Offset"
                             };
-                            ms.AppendEntity(mt);
-                            tr.AddNewlyCreatedDBObject(mt, true);
-
-                            // optional: fire DIMPERP LISP
-                            AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
-                                $"DIMPERP ", true, false, false);
+                            ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
                         }
 
-                        bool found = false;
-                        if (nsCurve != null) { DrawOffset(nsCurve, nsClosest); found = true; }
-                        if (ewCurve != null) { DrawOffset(ewCurve, ewClosest); found = true; }
+                        bool nsMade = false, ewMade = false;
+                        if (nsCv != null) { DrawOffset(nsCp, true); nsMade = true; }
+                        if (ewCv != null) { DrawOffset(ewCp, false); ewMade = true; }
 
-                        if (!found) noOffsetLabels.Add(label);
+                        if (!nsMade) warnList.Add($"{label} (N-S)");
+                        if (!ewMade) warnList.Add($"{label} (E-W)");
                     }
-
                     tr.Commit();
                 }
 
-                /* ---------------- 4)  Final user message ------------------------ */
-                if (noOffsetLabels.Count > 0)
-                    ShowAlert($"No L-SEC-HB within 830 m for: {string.Join(", ", noOffsetLabels)}");
+                /* 4 ── final message ─────────────────────────────────────────── */
+                if (warnList.Count > 0)
+                    ShowAlert("Unable to find L-SEC-HB for:\n  • " + string.Join("\n  • ", warnList));
                 else
                     ShowAlert("Add Offsets complete.");
             }
-            catch (System.Exception ex)  // fully-qualified to avoid ambiguity
+            catch (System.Exception ex)
             {
                 Logger.LogError($"AddOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 ShowAlert($"Error: {ex.Message}");
