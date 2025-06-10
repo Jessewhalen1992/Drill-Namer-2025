@@ -2690,7 +2690,7 @@ namespace Drill_Namer
                 int rows = selectedTable.Rows.Count;
                 int cols = selectedTable.Columns.Count;
 
-                OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
+                OfficeOpenXml.ExcelPackage.License.SetNonCommercialOrganization("Compass Geomatics");
                 using (var package = new OfficeOpenXml.ExcelPackage())
                 {
                     var ws = package.Workbook.Worksheets.Add("ExportedTable");
@@ -3460,7 +3460,7 @@ namespace Drill_Namer
 
         private string[,] ReadExcelData(string excelFilePath, string range)
         {
-            OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
+            OfficeOpenXml.ExcelPackage.License.SetNonCommercialOrganization("Compass Geomatics");
             using (var package = new ExcelPackage(new FileInfo(excelFilePath)))
             {
                 var ws = package.Workbook.Worksheets[0];
