@@ -1986,7 +1986,11 @@ namespace Drill_Namer
         {
             try
             {
-                // STEP 0: Extract grid labels from layer "Z-DRILL-POINT" and export to C:\CORDS\CORDS.csv
+                // 1) EPPlus-8: set noncommercial license (replace the string with your org/person name)
+                OfficeOpenXml.ExcelPackage.License
+                    .SetNonCommercialOrganization("Compass Geomatics");
+
+                // STEP 0: Extract grid labels…
                 Document doc = AcApplication.DocumentManager.MdiActiveDocument;
                 Database db = doc.Database;
                 Editor ed = doc.Editor;
@@ -1994,215 +1998,176 @@ namespace Drill_Namer
 
                 using (Transaction tr = db.TransactionManager.StartTransaction())
                 {
-                    BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+                    var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+                    var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
                     foreach (ObjectId id in ms)
                     {
-                        Entity ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
                         if (ent != null && ent.Layer.Equals("Z-DRILL-POINT", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (ent is DBText dbText)
-                            {
-                                string textValue = dbText.TextString.Trim();
-                                if (IsGridLabel(textValue))
-                                {
-                                    gridData.Add((textValue, dbText.Position.Y, dbText.Position.X));
-                                }
-                            }
-                            else if (ent is MText mText)
-                            {
-                                string textValue = mText.Contents.Trim();
-                                if (IsGridLabel(textValue))
-                                {
-                                    gridData.Add((textValue, mText.Location.Y, mText.Location.X));
-                                }
-                            }
+                            if (ent is DBText dbText && IsGridLabel(dbText.TextString.Trim()))
+                                gridData.Add((dbText.TextString.Trim(), dbText.Position.Y, dbText.Position.X));
+                            else if (ent is MText mText && IsGridLabel(mText.Contents.Trim()))
+                                gridData.Add((mText.Contents.Trim(), mText.Location.Y, mText.Location.X));
                         }
                     }
                     tr.Commit();
                 }
                 gridData = gridData.OrderBy(x => x.Label).ToList();
 
-                // STEP 1: Write CSV file
+                // STEP 1: Write CSV…
                 string cordsDir = @"C:\CORDS";
                 Directory.CreateDirectory(cordsDir);
                 string csvPath = Path.Combine(cordsDir, "cords.csv");
-                using (StreamWriter sw = new StreamWriter(csvPath, false))
+                using (var sw = new StreamWriter(csvPath, false))
                 {
                     sw.WriteLine("Label,Northing,Easting");
                     foreach (var pt in gridData)
-                    {
                         sw.WriteLine($"{pt.Label},{pt.Northing},{pt.Easting}");
-                    }
                 }
 
-                MessageBox.Show("DONT TOUCH, WAIT FOR INSTRUCTION", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("DONT TOUCH, WAIT FOR INSTRUCTION", "Information",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                // STEP 2: Determine parameter value.
+                // STEP 2: Determine parameter…
                 string headingValue = headingComboBox.SelectedItem?.ToString() ?? "OTHER";
                 string paramValue = (headingValue == "VEREN") ? "HEEL" : "ICP";
 
-                // STEP 3: Launch the Python EXE (cords.exe). With the updated Python script it will close once the Excel file is generated.
+                // STEP 3: Launch Python EXE…
                 string processExe = @"C:\AUTOCAD-SETUP\Lisp_2000\Drill Properties\cords.exe";
                 if (File.Exists(processExe))
                 {
-                    Logger.LogInfo($"Attempting to run exe: {processExe} with arguments: \"{csvPath}\" \"{paramValue}\"");
-                    ProcessStartInfo psi = new ProcessStartInfo(processExe, $"\"{csvPath}\" \"{paramValue}\"")
+                    Logger.LogInfo($"Running: {processExe} \"{csvPath}\" \"{paramValue}\"");
+                    var psi = new ProcessStartInfo(processExe, $"\"{csvPath}\" \"{paramValue}\"")
                     {
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         RedirectStandardOutput = true,
-                        RedirectStandardError = true
+                        RedirectStandardError = true,
+                        StandardOutputEncoding = Encoding.GetEncoding(1252),
+                        StandardErrorEncoding = Encoding.GetEncoding(1252)
                     };
-                    // Ensure output encoding matches Python's cp1252 fallback
-                    psi.StandardOutputEncoding = Encoding.GetEncoding(1252);
-                    psi.StandardErrorEncoding = Encoding.GetEncoding(1252);
-
-                    using (Process proc = Process.Start(psi))
+                    using (var proc = Process.Start(psi))
                     {
-                        // Wait up to 180 seconds for the Python process to finish.
-                        if (!proc.WaitForExit(180000))
+                        if (!proc.WaitForExit(180_000))
                         {
                             try { proc.Kill(); } catch { }
-                            Logger.LogError("cords.exe did not exit within 180 seconds.");
-                            MessageBox.Show("The cords.exe process did not exit in time and was terminated.",
-                                            "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            Logger.LogError("cords.exe timeout");
+                            MessageBox.Show("cords.exe did not exit in time.", "Error",
+                                            MessageBoxButtons.OK, MessageBoxIcon.Error);
                             return;
                         }
-                        string output = proc.StandardOutput.ReadToEnd();
-                        string errorOutput = proc.StandardError.ReadToEnd();
-                        if (!string.IsNullOrEmpty(output))
-                            Logger.LogInfo($"cords.exe output: {output}");
-                        if (!string.IsNullOrEmpty(errorOutput))
-                            Logger.LogError($"cords.exe error: {errorOutput}");
+                        string outp = proc.StandardOutput.ReadToEnd();
+                        string errp = proc.StandardError.ReadToEnd();
+                        if (!string.IsNullOrEmpty(outp)) Logger.LogInfo(outp);
+                        if (!string.IsNullOrEmpty(errp)) Logger.LogError(errp);
                         if (proc.ExitCode != 0)
                         {
-                            Logger.LogError($"cords.exe exited with code {proc.ExitCode}");
-                            MessageBox.Show($"cords.exe exited with code {proc.ExitCode}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            Logger.LogError($"cords.exe code {proc.ExitCode}");
+                            MessageBox.Show($"cords.exe exited with {proc.ExitCode}", "Error",
+                                            MessageBoxButtons.OK, MessageBoxIcon.Error);
                             return;
                         }
                     }
-                    Logger.LogInfo($"cords.exe executed successfully. Param = {paramValue}");
                 }
                 else
                 {
-                    Logger.LogWarning($"Executable not found at {processExe}. Skipping execution.");
+                    Logger.LogWarning("cords.exe not found, skipping.");
                 }
 
-                // STEP 4: Confirm the Excel file exists.
+                // STEP 4: Confirm Excel exists…
                 string excelFilePath = Path.Combine(cordsDir, "ExportedCoordsFormatted.xlsx");
                 if (!File.Exists(excelFilePath))
                 {
-                    MessageBox.Show("The file ExportedCoordsFormatted.xlsx was not found in C:\\CORDS.",
-                                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("ExportedCoordsFormatted.xlsx not found.", "Error",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                // STEP 5: Read and process the Excel file.
-                OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
+                // STEP 5: Read/process Excel…
                 string[,] tableData;
                 using (var package = new OfficeOpenXml.ExcelPackage(new FileInfo(excelFilePath)))
                 {
-                    ExcelWorksheet ws = package.Workbook.Worksheets[0];
+                    var ws = package.Workbook.Worksheets[0];
                     if (ws.Dimension == null)
                     {
-                        MessageBox.Show("The Excel file is empty.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show("The Excel file is empty.", "Error",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
-                    int startRow = ws.Dimension.Start.Row;
-                    int startCol = ws.Dimension.Start.Column;
-                    int endRow = ws.Dimension.End.Row;
-                    int endCol = ws.Dimension.End.Column;
+                    int sr = ws.Dimension.Start.Row, sc = ws.Dimension.Start.Column;
+                    int er = ws.Dimension.End.Row, ec = ws.Dimension.End.Column;
 
-                    int lastRow = endRow;
-                    for (int r = endRow; r >= startRow; r--)
+                    // trim trailing blanks
+                    int lastRow = er;
+                    for (int r = er; r >= sr; r--)
                     {
-                        bool rowBlank = true;
-                        for (int c = startCol; c <= endCol; c++)
-                        {
+                        bool blank = true;
+                        for (int c = sc; c <= ec; c++)
                             if (!string.IsNullOrWhiteSpace(ws.Cells[r, c].Text))
                             {
-                                rowBlank = false;
+                                blank = false;
                                 break;
                             }
-                        }
-                        if (!rowBlank)
-                        {
-                            lastRow = r;
-                            break;
-                        }
+                        if (!blank) { lastRow = r; break; }
                     }
 
-                    int rows = lastRow - startRow + 1;
-                    int cols = endCol - startCol + 1;
+                    int rows = lastRow - sr + 1, cols = ec - sc + 1;
                     tableData = new string[rows, cols];
                     for (int r = 0; r < rows; r++)
-                    {
                         for (int c = 0; c < cols; c++)
-                        {
-                            tableData[r, c] = ws.Cells[r + startRow, c + startCol].Text;
-                        }
-                    }
+                            tableData[r, c] = ws.Cells[r + sr, c + sc].Text;
                 }
-                Logger.LogInfo($"Read {tableData.GetLength(0)} rows and {tableData.GetLength(1)} columns from {excelFilePath}.");
 
-                // STEP 6: Adjust cell values based on client selection.
-                if (headingComboBox.SelectedItem?.ToString() == "VEREN")
+                // STEP 6: Swap ICP/HEEL if needed…
+                if (headingValue == "VEREN")
                 {
                     for (int r = 0; r < tableData.GetLength(0); r++)
-                    {
                         for (int c = 0; c < tableData.GetLength(1); c++)
-                        {
                             if (!string.IsNullOrEmpty(tableData[r, c]) && tableData[r, c].Contains("ICP"))
-                            {
                                 tableData[r, c] = tableData[r, c].Replace("ICP", "HEEL");
-                            }
-                        }
-                    }
                 }
-                else if (headingComboBox.SelectedItem?.ToString() == "OTHER")
+                else if (headingValue == "OTHER")
                 {
                     for (int r = 0; r < tableData.GetLength(0); r++)
-                    {
                         for (int c = 0; c < tableData.GetLength(1); c++)
-                        {
                             if (!string.IsNullOrEmpty(tableData[r, c]) && tableData[r, c].Contains("HEEL"))
-                            {
                                 tableData[r, c] = tableData[r, c].Replace("HEEL", "ICP");
-                            }
-                        }
-                    }
                 }
 
-                // STEP 7: Prompt user for insertion point.
-                MessageBox.Show("BACK TO CAD, PICK A INSERTION POINT", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                doc = AcApplication.DocumentManager.MdiActiveDocument;
-                ed = doc.Editor;
-                PromptPointResult ppr = ed.GetPoint("\nSelect insertion point for the coordinate table:");
+                // STEP 7: Get insertion point…
+                MessageBox.Show("BACK TO CAD, PICK A POINT", "Info",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ed = AcApplication.DocumentManager.MdiActiveDocument.Editor;
+                var ppr = ed.GetPoint("\nSelect insertion point:");
                 if (ppr.Status != PromptStatus.OK)
                 {
-                    ed.WriteMessage("\nInsertion point selection cancelled.");
+                    ed.WriteMessage("\nCancelled.");
                     return;
                 }
                 Point3d insertionPt = ppr.Value;
 
-                // STEP 8: Insert and format the table.
-                using (DocumentLock docLock = doc.LockDocument())
+                // STEP 8: Insert table
+                using (var docLock = doc.LockDocument())
                 {
+                    // 2) use doc.Database — not docLock.Document
                     db = doc.Database;
                     EnsureLayer(db, "CG-NOTES");
                     InsertAndFormatTable(insertionPt, tableData, "induction Bend");
                 }
-                MessageBox.Show("Coordinate table created successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                Logger.LogInfo("COMPLETE CORDS: Coordinate table created successfully.");
 
-                // STEP 9: Insert headings.
+                MessageBox.Show("Coordinate table created!", "Success",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Logger.LogInfo("COMPLETE CORDS succeeded.");
+
+                // STEP 9: Add headings
                 HeadingAllButton_Click(null, EventArgs.Empty);
             }
-            catch (System.Exception ex)
+            catch (System.Exception ex)  // 3) fully qualify to avoid ambiguity
             {
                 Logger.LogError($"Error in COMPLETE CORDS: {ex.Message}\n{ex.StackTrace}");
-                MessageBox.Show($"Error in COMPLETE CORDS: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error in COMPLETE CORDS: {ex.Message}", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         /// <summary>
