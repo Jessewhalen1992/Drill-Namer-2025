@@ -1094,6 +1094,30 @@ namespace Drill_Namer
         #endregion
 
 
+        // … inside the FindReplaceForm class
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+
+            // If the form is minimised restore it first – otherwise .Location is junk
+            if (WindowState == FormWindowState.Minimized)
+                WindowState = FormWindowState.Normal;
+
+            Rectangle formRect = new Rectangle(Location, Size);
+
+            bool onScreen = Screen.AllScreens
+                                  .Any(s => s.WorkingArea.IntersectsWith(formRect));
+
+            if (!onScreen)
+            {
+                // fall-back: centre on the primary screen
+                var wa = Screen.PrimaryScreen.WorkingArea;
+                StartPosition = FormStartPosition.Manual;   // stop Windows re-mangling it
+                Location = new Point(
+                    wa.Left + (wa.Width - Width) / 2,
+                    wa.Top + (wa.Height - Height) / 2);
+            }
+        }
 
         private DrillData GenerateJsonForDrill(int drillIndex, Table coordinateTable = null, bool collectDataOnly = false)
         {
@@ -3875,27 +3899,40 @@ namespace Drill_Namer
             try
             {
                 Document doc = AcApplication.DocumentManager.MdiActiveDocument;
-                if (doc == null) { ShowAlert("No active AutoCAD document."); return; }
+                if (doc == null)
+                {
+                    ShowAlert("No active AutoCAD document.");
+                    return;
+                }
                 Database db = doc.Database;
 
-                /* 1 ── gather Z-DRILL-POINT labels ───────────────────────────── */
+                /*───────────────────────────────────────────────────────────────*
+                 * 1 ── collect Z-DRILL-POINT grid labels                       *
+                 *───────────────────────────────────────────────────────────────*/
                 var textEnts = GetEntitiesOnLayer(
                     db, "Z-DRILL-POINT",
                     RXObject.GetClass(typeof(DBText)),
                     RXObject.GetClass(typeof(MText))).ToList();
 
-                Regex gridRx = new Regex("^[A-Z][1-9][0-9]{0,2}$");
+                Regex gridRx = new Regex("^[A-Z][1-9][0-9]{0,2}$");     // A1 … Z150
                 var gridPts = new List<(string Label, Point3d Pt)>();
-                foreach (var ent in textEnts)
+
+                foreach (var ent in textEnts)                            // <-- renamed here
                 {
                     if (ent is DBText t && gridRx.IsMatch(t.TextString.Trim()))
                         gridPts.Add((t.TextString.Trim(), t.Position));
                     else if (ent is MText m && gridRx.IsMatch(m.Contents.Trim()))
                         gridPts.Add((m.Contents.Trim(), m.Location));
                 }
-                if (gridPts.Count == 0) { ShowAlert("No Z-DRILL-POINT labels found."); return; }
+                if (gridPts.Count == 0)
+                {
+                    ShowAlert("No Z-DRILL-POINT labels found.");
+                    return;
+                }
 
-                /* 2 ── gather L-SEC-HB curves ────────────────────────────────── */
+                /*───────────────────────────────────────────────────────────────*
+                 * 2 ── collect L-SEC-HB polylines / lines                       *
+                 *───────────────────────────────────────────────────────────────*/
                 var curveEnts = GetEntitiesOnLayer(
                     db, "L-SEC-HB",
                     RXObject.GetClass(typeof(Line)),
@@ -3904,11 +3941,17 @@ namespace Drill_Namer
                     RXObject.GetClass(typeof(Polyline3d))).ToList();
 
                 var curves = curveEnts.OfType<Curve>().ToList();
-                if (curves.Count == 0) { ShowAlert("No L-SEC-HB polylines/lines found."); return; }
+                if (curves.Count == 0)
+                {
+                    ShowAlert("No L-SEC-HB polylines/lines found.");
+                    return;
+                }
 
-                /* 3 ── process each grid point ───────────────────────────────── */
-                var warnList = new List<string>();         // list of points without one or both offsets
-                Tolerance tol = new Tolerance(1e-3, 1e-3); // 1 mm geometric tolerance
+                /*───────────────────────────────────────────────────────────────*
+                 * 3 ── build offsets (skip dups)                                *
+                 *───────────────────────────────────────────────────────────────*/
+                var warnList = new List<string>();
+                Tolerance tol = new Tolerance(1e-3, 1e-3);   // ~1 mm
 
                 using (DocumentLock _ = doc.LockDocument())
                 using (Transaction tr = db.TransactionManager.StartTransaction())
@@ -3916,9 +3959,10 @@ namespace Drill_Namer
                     EnsureLayer(db, "P-Drill-Offset");
 
                     BlockTable bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                    BlockTableRecord ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+                    BlockTableRecord ms =
+                        (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
 
-                    /* local helper: does a P-Drill-Offset line between these points already exist? */
+                    /* helper ───────────────────────────────────────────────*/
                     bool OffsetLineExists(Point3d p1, Point3d p2)
                     {
                         foreach (ObjectId id in ms)
@@ -3928,23 +3972,23 @@ namespace Drill_Namer
                             {
                                 if ((ln.StartPoint.IsEqualTo(p1, tol) && ln.EndPoint.IsEqualTo(p2, tol)) ||
                                     (ln.StartPoint.IsEqualTo(p2, tol) && ln.EndPoint.IsEqualTo(p1, tol)))
-                                {
                                     return true;
-                                }
                             }
                         }
                         return false;
                     }
 
-                    /* local helper: draw line + MTEXT (skip if duplicate) */
-                    void DrawOffset(Point3d from, Point3d to, string dirLabel)
+                    /* helper ─ draw a single offset (distance text = red, no < >) */
+                    void DrawOffset(Point3d from, Point3d to)
                     {
-                        if (OffsetLineExists(from, to)) return;   // duplicate detected
+                        if (OffsetLineExists(from, to)) return;   // duplicate – skip
 
                         double dist = from.DistanceTo(to);
+                        string distStr = dist.ToString("0.0", CultureInfo.InvariantCulture);
 
                         var ln = new Line(from, to) { Layer = "P-Drill-Offset" };
-                        ms.AppendEntity(ln); tr.AddNewlyCreatedDBObject(ln, true);
+                        ms.AppendEntity(ln);
+                        tr.AddNewlyCreatedDBObject(ln, true);
 
                         Point3d mid = new Point3d((from.X + to.X) / 2.0,
                                                   (from.Y + to.Y) / 2.0,
@@ -3954,28 +3998,30 @@ namespace Drill_Namer
                         {
                             Location = mid,
                             TextHeight = 2.5,
-                            Contents = $"{{\\C1;{dist:F1}}}",   // red text, no angle brackets
+                            Contents = $"{{\\C1;{distStr}}}",   // red text
                             Layer = "P-Drill-Offset"
                         };
-                        ms.AppendEntity(mt); tr.AddNewlyCreatedDBObject(mt, true);
+                        ms.AppendEntity(mt);
+                        tr.AddNewlyCreatedDBObject(mt, true);
 
-                        // Optionally call the user’s DIMPERP LISP (best-effort)
-                        AcApplication.DocumentManager.MdiActiveDocument.SendStringToExecute(
-                            "DIMPERP ", true, false, false);
+                        // kick off user’s DIMPERP LISP (best-effort, silent)
+                        AcApplication.DocumentManager.MdiActiveDocument
+                            .SendStringToExecute("DIMPERP ", true, false, false);
                     }
 
+                    /* main loop ───────────────────────────────────────────*/
                     foreach (var (label, pt) in gridPts)
                     {
                         Curve nsCv = null, ewCv = null;
                         Point3d nsCp = Point3d.Origin, ewCp = Point3d.Origin;
                         double nsDx = double.MaxValue, ewDy = double.MaxValue;
 
-                        // pick nearest NS & EW curves within 830 m
+                        // find nearest N-S (min ΔX) and E-W (min ΔY) within 830 m
                         foreach (var cv in curves)
                         {
                             Point3d cp = cv.GetClosestPointTo(pt, false);
-                            double dist = pt.DistanceTo(cp);
-                            if (dist > 830.0) continue;
+                            double dst = pt.DistanceTo(cp);
+                            if (dst > 830.0) continue;
 
                             double dx = Math.Abs(pt.X - cp.X);
                             double dy = Math.Abs(pt.Y - cp.Y);
@@ -3985,23 +4031,26 @@ namespace Drill_Namer
                         }
 
                         bool nsMade = false, ewMade = false;
-                        if (nsCv != null) { DrawOffset(pt, nsCp, "N-S"); nsMade = true; }
-                        if (ewCv != null) { DrawOffset(pt, ewCp, "E-W"); ewMade = true; }
+                        if (nsCv != null) { DrawOffset(pt, nsCp); nsMade = true; }
+                        if (ewCv != null) { DrawOffset(pt, ewCp); ewMade = true; }
 
                         if (!nsMade) warnList.Add($"{label} (N-S)");
                         if (!ewMade) warnList.Add($"{label} (E-W)");
                     }
+
                     tr.Commit();
                 }
 
-                /* 4 ── final user message ────────────────────────────────────── */
+                /*───────────────────────────────────────────────────────────────*
+                 * 4 ── summary message                                          *
+                 *───────────────────────────────────────────────────────────────*/
                 if (warnList.Count > 0)
                     ShowAlert("Unable to find L-SEC-HB for:\n  • " +
                               string.Join("\n  • ", warnList));
                 else
                     ShowAlert("Add Offsets complete.");
             }
-            catch (System.Exception ex)     // qualify to avoid ambiguity
+            catch (System.Exception ex)   // avoid ambiguity w/ AutoCAD exception
             {
                 Logger.LogError($"AddOffsetsButton_Click: {ex.Message}\n{ex.StackTrace}");
                 ShowAlert($"Error: {ex.Message}");
